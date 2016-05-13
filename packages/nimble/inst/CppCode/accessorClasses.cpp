@@ -3,16 +3,125 @@
 #include<sstream>
 using std::istringstream;
 
+// double getParam_0D_double(int paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) { //iNodeFunction has default 0 in prototype
+//   /* iNodeFunction sometimes needs to be generated in a call even if not needed */
+//   /* but we want to avoid compiled warnings about an unused argument */
+//   /* the following line of code tries to make the compiler think iNodeFunction will be used */
+//   if(iNodeFunction == 0) paramID += 0;
+//   return(useInfo.nodeFunPtr->getParam_0D_double_block(paramID, useInfo.useInfo));
+// }
+
+// /* This is for a case like model$getParam(nodes[i], 'mean'), where then paramID becomes a vector.  The vector of nodeFxnPtrs is unpacked at the line of generated C++ */
+// template<class paramIDtype>
+// double getParam_0D_double(const paramIDtype &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) {
+//   return(useInfo.nodeFunPtr->getParam_0D_double_block(paramID[iNodeFunction], useInfo.useInfo));
+// }
+
+// template double getParam_0D_double<NimArr<1, int> >(const NimArr<1, int> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+// template double getParam_0D_double<NimArr<1, double> >(const NimArr<1, double> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+
+NimArr<1, double> getParam_1D_double(int paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) {
+  if(iNodeFunction == 0) paramID += 0;
+  return(useInfo.nodeFunPtr->getParam_1D_double_block(paramID, useInfo.useInfo));
+}
+
+template<class paramIDtype>
+NimArr<1, double> getParam_1D_double(const paramIDtype &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) {
+  return(useInfo.nodeFunPtr->getParam_1D_double_block(paramID[iNodeFunction], useInfo.useInfo));
+}
+
+template NimArr<1, double> getParam_1D_double<NimArr<1, int> >(const NimArr<1, int> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+template NimArr<1, double> getParam_1D_double<NimArr<1, double> >(const NimArr<1, double> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+
+NimArr<2, double> getParam_2D_double(int paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) {
+  if(iNodeFunction == 0) paramID += 0;
+  return(useInfo.nodeFunPtr->getParam_2D_double_block(paramID, useInfo.useInfo));
+}
+
+template<class paramIDtype>
+NimArr<2, double> getParam_2D_double(const paramIDtype &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) {
+  return(useInfo.nodeFunPtr->getParam_2D_double_block(paramID[iNodeFunction], useInfo.useInfo));
+}
+
+template NimArr<2, double> getParam_2D_double<NimArr<1, int> >(const NimArr<1, int> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+template NimArr<2, double> getParam_2D_double<NimArr<1, double> >(const NimArr<1, double> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+
+
 double calculate(NodeVectorClassNew &nodes) {
   double ans(0);
   const vector<oneNodeUseInfo> &useInfoVec = nodes.getUseInfoVec();
   vector<oneNodeUseInfo>::const_iterator iNode(useInfoVec.begin());
-  vector<oneNodeUseInfo>::const_iterator iNodeEnd(useInfoVec.end());
-  std::cout<<"length of useInfoVec = "<<useInfoVec.size()<<"\n";
+  vector<oneNodeUseInfo>::const_iterator iNodeEnd(useInfoVec.end());  
   for(; iNode != iNodeEnd; iNode++)
     ans += iNode->nodeFunPtr->calculateBlock(iNode->useInfo);
   return(ans);
 }
+
+
+double calculate(NodeVectorClassNew &nodes, int iNodeFunction) {
+  if(nodes.getUseInfoVec().size() < iNodeFunction) {
+    PRINTF("Warning in calculate: index of requested set of nodes is too large\n");
+    return(0);
+  }
+  const oneNodeUseInfo &oneUseInfo = nodes.getUseInfoVec()[iNodeFunction-1];
+  return(oneUseInfo.nodeFunPtr->calculateBlock(oneUseInfo.useInfo));
+}
+
+double calculateDiff(NodeVectorClassNew &nodes) {
+  double ans(0);
+  const vector<oneNodeUseInfo> &useInfoVec = nodes.getUseInfoVec();
+  vector<oneNodeUseInfo>::const_iterator iNode(useInfoVec.begin());
+  vector<oneNodeUseInfo>::const_iterator iNodeEnd(useInfoVec.end());  
+  for(; iNode != iNodeEnd; iNode++)
+    ans += iNode->nodeFunPtr->calculateDiffBlock(iNode->useInfo);
+  return(ans);
+}
+
+double calculateDiff(NodeVectorClassNew &nodes, int iNodeFunction) {
+  if(nodes.getUseInfoVec().size() < iNodeFunction) {
+    PRINTF("Warning in calculateDiff: index of requested set of nodes is too large\n");
+    return(0);
+  }
+  const oneNodeUseInfo &oneUseInfo = nodes.getUseInfoVec()[iNodeFunction-1];
+  return(oneUseInfo.nodeFunPtr->calculateDiffBlock(oneUseInfo.useInfo));
+}
+
+double getLogProb(NodeVectorClassNew &nodes) {
+  double ans(0);
+  const vector<oneNodeUseInfo> &useInfoVec = nodes.getUseInfoVec();
+  vector<oneNodeUseInfo>::const_iterator iNode(useInfoVec.begin());
+  vector<oneNodeUseInfo>::const_iterator iNodeEnd(useInfoVec.end());  
+  for(; iNode != iNodeEnd; iNode++)
+    ans += iNode->nodeFunPtr->getLogProbBlock(iNode->useInfo);
+  return(ans);
+}
+
+double getLogProb(NodeVectorClassNew &nodes, int iNodeFunction) {
+  if(nodes.getUseInfoVec().size() < iNodeFunction) {
+    PRINTF("Warning in getLogProb: index of requested set of nodes is too large\n");
+    return(0);
+  }
+  const oneNodeUseInfo &oneUseInfo = nodes.getUseInfoVec()[iNodeFunction-1];
+  return(oneUseInfo.nodeFunPtr->getLogProbBlock(oneUseInfo.useInfo));
+}
+
+void simulate(NodeVectorClassNew &nodes) {
+  const vector<oneNodeUseInfo> &useInfoVec = nodes.getUseInfoVec();
+  vector<oneNodeUseInfo>::const_iterator iNode(useInfoVec.begin());
+  vector<oneNodeUseInfo>::const_iterator iNodeEnd(useInfoVec.end());  
+  for(; iNode != iNodeEnd; iNode++)
+    iNode->nodeFunPtr->simulateBlock(iNode->useInfo);
+}
+
+void simulate(NodeVectorClassNew &nodes, int iNodeFunction) {
+  if(nodes.getUseInfoVec().size() < iNodeFunction) {
+    PRINTF("Warning in simulate: index of requested set of nodes is too large\n");
+    return;
+  }
+  const oneNodeUseInfo &oneUseInfo = nodes.getUseInfoVec()[iNodeFunction-1];
+  oneUseInfo.nodeFunPtr->simulateBlock(oneUseInfo.useInfo);
+}
+
 
 // // 1. NodeVectors
 // // double calculateOld(NodeVectorClass &nodes) {
@@ -447,7 +556,8 @@ void copierVectorClass::setup(ManyVariablesMapAccessorBase *from, ManyVariablesM
 #endif
   
   if(fromAccessors.size() != toAccessors.size()) {
-    std::cout<<"Error in setting up a copierVector: from and to access vectors have sizes "<<fromAccessors.size() << " and " << toAccessors.size() << "\n";
+    _nimble_global_output<<"Error in setting up a copierVector: from and to access vectors have sizes "<<fromAccessors.size() << " and " << toAccessors.size() << "\n";
+    nimble_print_to_R(_nimble_global_output);
   }
   copyVector.resize( fromAccessors.size() );
   //PRINTF("Ready to set up length %i\n", copyVector.size());
@@ -485,7 +595,8 @@ void nimCopy(ManyVariablesMapAccessorBase &from, ManyVariablesMapAccessorBase &t
 #endif
   
   if(fromAccessors.size() != toAccessors.size()) {
-    std::cout<<"Error in nimCopy: from and to access vectors have sizes "<<fromAccessors.size() << " and " << toAccessors.size() << "\n";
+    _nimble_global_output<<"Error in nimCopy: from and to access vectors have sizes "<<fromAccessors.size() << " and " << toAccessors.size() << "\n";
+    nimble_print_to_R(_nimble_global_output);
   }
 
   vector<SingleVariableMapAccessBase *>::iterator iFrom, iTo, iFromEnd;
@@ -639,7 +750,8 @@ void nimCopyOne(SingleVariableMapAccessBase *from, SingleVariableMapAccessBase *
 	(*static_cast<NimArrBase<int> *>(toNimArr))[to->getOffset()] = (*static_cast<NimArrBase<double> *>(fromNimArr))[from->getOffset()];
       break;
     default:
-      cout<<"Error in nimCopyOne: unknown type for destination\n";
+      _nimble_global_output<<"Error in nimCopyOne: unknown type for destination\n";
+      nimble_print_to_R(_nimble_global_output);
     }
     break;
   case INT:
@@ -651,11 +763,13 @@ void nimCopyOne(SingleVariableMapAccessBase *from, SingleVariableMapAccessBase *
 	(*static_cast<NimArrBase<int> *>(toNimArr))[to->getOffset()] = (*static_cast<NimArrBase<int> *>(fromNimArr))[from->getOffset()];
       break;
     default:
-      cout<<"Error in nimCopyOne: unknown type for destination\n";
+      _nimble_global_output<<"Error in nimCopyOne: unknown type for destination\n";
+      nimble_print_to_R(_nimble_global_output);
     }
     break;
   default:
-    cout<<"Error in nimCopyOne: unknown type for source\n";
+    _nimble_global_output<<"Error in nimCopyOne: unknown type for source\n";
+    nimble_print_to_R(_nimble_global_output);
     }
   } else {
 #ifdef __NIMBLE_DEBUG_ACCESSORS
@@ -672,7 +786,8 @@ void nimCopyOne(SingleVariableMapAccessBase *from, SingleVariableMapAccessBase *
 	dynamicMapCopy<double, int>(toNimArr, to->getOffset(), to->getStrides(), to->getSizes(), fromNimArr, from->getOffset(), from->getStrides(), from->getSizes() );
 	break;
       default:
-	cout<<"Error in nimCopyOne: unknown type for destination\n";
+	_nimble_global_output<<"Error in nimCopyOne: unknown type for destination\n";
+	nimble_print_to_R(_nimble_global_output);
       }
       break;
     case INT:
@@ -684,11 +799,11 @@ void nimCopyOne(SingleVariableMapAccessBase *from, SingleVariableMapAccessBase *
 	dynamicMapCopy<int, int>(toNimArr, to->getOffset(), to->getStrides(), to->getSizes(), fromNimArr, from->getOffset(), from->getStrides(), from->getSizes() );
 	break;
       default:
-	cout<<"Error in nimCopyOne: unknown type for destination\n";
+	_nimble_global_output<<"Error in nimCopyOne: unknown type for destination\n";
       }
       break;
     default:
-      cout<<"Error in nimCopyOne: unknown type for destination\n";
+      _nimble_global_output<<"Error in nimCopyOne: unknown type for destination\n";
     }
   }
 }
@@ -698,10 +813,10 @@ void singletonCopyCheck(NimArrType *NAT, int offset) {
   int NATsize;
   switch(NATtype) {
   case INT:
-    NATsize = static_cast<NimArrBase<int>*>(NAT)->getVptr()->size();
+    NATsize = static_cast<NimArrBase<int>*>(NAT)->size(); //getVptr()->size();
     break;
   case DOUBLE:
-    NATsize = static_cast<NimArrBase<int>*>(NAT)->getVptr()->size();
+    NATsize = static_cast<NimArrBase<int>*>(NAT)->size(); //getVptr()->size();
     break;
   default:
     PRINTF("Error with a NimArrType type\n");
@@ -716,10 +831,10 @@ void dynamicMapCopyCheck(NimArrType *NAT, int offset, vector<int> &strides, vect
   int NATsize;
   switch(NATtype) {
   case INT:
-    NATsize = static_cast<NimArrBase<int>*>(NAT)->getVptr()->size();
+    NATsize = static_cast<NimArrBase<int>*>(NAT)->size(); //getVptr()->size();
     break;
   case DOUBLE:
-    NATsize = static_cast<NimArrBase<int>*>(NAT)->getVptr()->size();
+    NATsize = static_cast<NimArrBase<int>*>(NAT)->size(); //getVptr()->size();
     break;
   default:
     PRINTF("Error with a NimArrType type\n");
@@ -741,7 +856,8 @@ void nimCopy(ManyVariablesAccessorBase &from, ManyVariablesAccessorBase &to) {
   vector<SingleVariableAccessBase *> toAccessors = to.getAccessVector();
 
   if(fromAccessors.size() != toAccessors.size()) {
-    std::cout<<"Error in nimCopy: from and to access vectors have sizes "<<fromAccessors.size() << " and " << toAccessors.size() << "\n";
+    _nimble_global_output<<"Error in nimCopy: from and to access vectors have sizes "<<fromAccessors.size() << " and " << toAccessors.size() << "\n";
+    nimble_print_to_R(_nimble_global_output);
   }
 
   vector<SingleVariableAccessBase *>::iterator iFrom, iTo, iFromEnd;
@@ -791,7 +907,8 @@ void nimCopyOne(SingleVariableAccessBase *from, SingleVariableAccessBase *to) {
       nimCopyOneTyped<double, int>(from, to);
       break;
     default:
-      cout<<"Error in nimCopyOne: unknown type for destination\n";
+      _nimble_global_output<<"Error in nimCopyOne: unknown type for destination\n";
+      nimble_print_to_R(_nimble_global_output);
     }
     break;
   case INT:
@@ -804,11 +921,13 @@ void nimCopyOne(SingleVariableAccessBase *from, SingleVariableAccessBase *to) {
       nimCopyOneTyped<int, int>(from, to);
       break;
     default:
-      cout<<"Error in nimCopyOne: unknown type for destination\n";
+      _nimble_global_output<<"Error in nimCopyOne: unknown type for destination\n";
+      nimble_print_to_R(_nimble_global_output);
     }
     break;
   default:
-    cout<<"Error in nimCopyOne: unknown type for source\n";
+    _nimble_global_output<<"Error in nimCopyOne: unknown type for source\n";
+    nimble_print_to_R(_nimble_global_output);
   }
 }
 
@@ -1080,9 +1199,10 @@ SEXP populateNodeFxnVector_byGID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedOb
 }
 
 SEXP populateNodeFxnVectorNew_byDeclID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedObj, SEXP S_ROWINDS){
-  std::cout<<"in populateNodeFxnVectorNew_byDeclID\n";
+  //std::cout<<"in populateNodeFxnVectorNew_byDeclID\n";
   int len = LENGTH(S_ROWINDS);
-  std::cout<<"len = "<<len<<"\n";
+  if(len == 0) return(R_NilValue);
+  //std::cout<<"len = "<<len<<"\n";
   int* gids = INTEGER(S_GIDs);
   int* rowinds = INTEGER(S_ROWINDS);
   int index;
@@ -1090,29 +1210,42 @@ SEXP populateNodeFxnVectorNew_byDeclID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP Snumb
   NodeVectorClassNew* nfv = static_cast<NodeVectorClassNew*>(R_ExternalPtrAddr(SnodeFxnVec) ) ;
   //  (*nfv).useInfoVec.resize(len);
   int previousIndex = -1;
+  int nextRowInd;
   for(int i = 0; i < len; i++){
     index = gids[i] - 1;
-    std::cout<<"index "<<index<<" i "<<i<<" rowinds[i]-1 "<<rowinds[i]-1<<"\n";
-    if(index != previousIndex) {
-      (*nfv).useInfoVec.push_back(oneNodeUseInfo(static_cast<nodeFun*>(numObj->getObjectPtr(index)), rowinds[i]-1)); 
+    //    std::cout<<"index "<<index<<" i "<<i<<" rowinds[i]-1 "<<rowinds[i]-1<<"\n";
+    nextRowInd = rowinds[i]-1;
+    if(nextRowInd == -1) { // should only happen from a scalar, so there is one dummy indexedNodeInfo
+      nextRowInd = 0;
+    }
+    if(true) { // (Disabling this aggregation because it messes up use of individual nodeFunctionVector elements) if(index != previousIndex) {
+      (*nfv).useInfoVec.push_back(oneNodeUseInfo(static_cast<nodeFun*>(numObj->getObjectPtr(index)), nextRowInd)); 
       previousIndex = index;
-    } else {
-      (*nfv).useInfoVec.back().useInfo.indicesForIndexedNodeInfo.push_back(rowinds[i]-1);
+    } else { // simple form of aggregation: push rows of same nodeFun into same object if they come one after the other
+      (*nfv).useInfoVec.back().useInfo.indicesForIndexedNodeInfo.push_back(nextRowInd);
     }
   }
-  std::cout<<"done with "<<(*nfv).useInfoVec.size()<<"\n";
+  //  std::cout<<"done with "<<(*nfv).useInfoVec.size()<<"\n";
   return(R_NilValue);
 }
 
 SEXP populateIndexedNodeInfoTable(SEXP StablePtr, SEXP StableContents) {
   SEXP Sdim;
-  std::cout<<"in populateIndexedNodeInfoTable\n";
+  //  std::cout<<"in populateIndexedNodeInfoTable\n";
   PROTECT(Sdim = getAttrib(StableContents, R_DimSymbol));
   if(LENGTH(Sdim) != 2) {PRINTF("Warning from populateIndexedNodeInfoTable: LENGTH(Sdim) != 2"); return(R_NilValue);}
   int nrow = INTEGER(Sdim)[0];
   int ncol = INTEGER(Sdim)[1];
-  std::cout<<"nrow "<<nrow<<" ncol "<<ncol<<"\n";
+  //std::cout<<"nrow "<<nrow<<" ncol "<<ncol<<"\n";
   vector<indexedNodeInfo> *tablePtr = static_cast<vector<indexedNodeInfo> *>(R_ExternalPtrAddr(StablePtr));
+  if(nrow == 0) {
+    void *vptr=0;
+    tablePtr->push_back(indexedNodeInfo(static_cast<int *>(vptr), 0, 0));
+    if(ncol != 0) {PRINTF("Warning from populateIndexedNodeInfoTable: nrow == 0 but ncol != 0.");}
+    UNPROTECT(1);
+    return(R_NilValue);
+  }
+  
   if(!isNumeric(StableContents)) {PRINTF("Warning from populateIndexedNodeInfoTable: StableContents is not numeric"); return(R_NilValue);}
   if(isInteger(StableContents)) {
     int *contentsPtr = INTEGER(StableContents);
@@ -1127,7 +1260,7 @@ SEXP populateIndexedNodeInfoTable(SEXP StablePtr, SEXP StableContents) {
       tablePtr->push_back(indexedNodeInfo(contentsPtrd + i, ncol, nrow));
     }
   }
-  std::cout<<"done with size "<<tablePtr->size()<<"\n";
+  //  std::cout<<"done with size "<<tablePtr->size()<<"\n";
   UNPROTECT(1);
   return(R_NilValue);
 }
@@ -1236,8 +1369,10 @@ void parseVarAndInds(const string &input, varAndIndicesClass &output) { //string
   int firstNum, secondNum;
   std::size_t iNextStart, iNonBlank;
   iBracket = restOfInput.find_first_of(']');
-  if(iBracket == std::string::npos) std::cout<<"problem in parseVarAndInds: there is no closing bracket\n";
-
+  if(iBracket == std::string::npos) {
+    _nimble_global_output<<"problem in parseVarAndInds: there is no closing bracket\n";
+    nimble_print_to_R(_nimble_global_output);
+  }
   while(!done) {
     iColon   = restOfInput.find_first_of(':');
     iComma   = restOfInput.find_first_of(',');
@@ -1357,8 +1492,14 @@ void varAndIndices2mapParts(const varAndIndicesClass &varAndInds, int snDim, con
   } else {
     //    vector<bool> blockBool(nDim, false);
     int thisSize;
-    if(nDim != sizes.size()) std::cout<<"Confused in varAndInds2MapParts: nDim != sizes.size()\n";
-    if(nDim != varAndInds.indices.size()) std::cout<<"Confused in varAndInds2MapParts: nDim != varAndInds.indices.size()\n";
+    if(nDim != sizes.size()) {
+      _nimble_global_output<<"Confused in varAndInds2MapParts: nDim != sizes.size()\n";
+      nimble_print_to_R(_nimble_global_output);
+    }
+    if(nDim != varAndInds.indices.size()) {
+      _nimble_global_output<<"Confused in varAndInds2MapParts: nDim != varAndInds.indices.size()\n";
+      nimble_print_to_R(_nimble_global_output);
+    }
     for(unsigned int i = 0; i < nDim; ++i) {
       thisSize = varAndInds.indices[i].size();
       switch(thisSize) {
@@ -1376,7 +1517,8 @@ void varAndIndices2mapParts(const varAndIndicesClass &varAndInds, int snDim, con
 	output.strides.push_back( currentStride );
 	break;
       default:
-	std::cout<<"Confused in varAndInds2MapParts: an index content has length > 2\n";
+	_nimble_global_output<<"Confused in varAndInds2MapParts: an index content has length > 2\n";
+	nimble_print_to_R(_nimble_global_output);
 	break;
       }
       currentStride *= sizes[i];
@@ -1441,7 +1583,8 @@ SEXP populateValueMapAccessorsFromNodeNames(SEXP StargetPtr, SEXP SnodeNames, SE
   int totalLength = 0;
 
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-  std::cout<<"New: "<<numNames<<"\n";
+  _nimble_global_output<<"New: "<<numNames<<"\n";
+  nimble_print_to_R(_nimble_global_output);
 #endif
   
   for(int i = 0; i < numNames; i++) {
@@ -1449,20 +1592,22 @@ SEXP populateValueMapAccessorsFromNodeNames(SEXP StargetPtr, SEXP SnodeNames, SE
     sizes = SEXP_2_vectorInt(VECTOR_ELT(SoneSizesAndNdims, 0));
     nDim = SEXP_2_int(VECTOR_ELT(SoneSizesAndNdims, 1));
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-    std::cout<<nodeNames[i]<<"\n";
+    _nimble_global_output<<nodeNames[i]<<"\n";
+    nimble_print_to_R(_nimble_global_output);
 #endif
     parseVarAndInds(nodeNames[i], varAndIndices);
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-    std::cout<<varAndIndices.varName<<" parsed: (";
+    _nimble_global_output<<varAndIndices.varName<<" parsed: (";
     for(int j = 0; j < varAndIndices.indices.size(); j++) {
-      std::cout<<"(";
-      for(int k = 0; k < varAndIndices.indices[j].size(); k++) std::cout<<varAndIndices.indices[j][k]<<" ";
-      std::cout<<") ";
+      _nimble_global_output<<"(";
+      for(int k = 0; k < varAndIndices.indices[j].size(); k++) _nimble_global_output<<varAndIndices.indices[j][k]<<" ";
+      _nimble_global_output<<") ";
     }
-    std::cout<<"\n";
-    std::cout<<"input nDim "<< nDim << "(";
-    for(int j = 0; j < sizes.size(); j++) std::cout<<sizes[j]<<" ";
-    std::cout<<")\n";
+    _nimble_global_output<<"\n";
+    _nimble_global_output<<"input nDim "<< nDim << "(";
+    for(int j = 0; j < sizes.size(); j++) _nimble_global_output<<sizes[j]<<" ";
+    _nimble_global_output<<")\n";
+    nimble_print_to_R(_nimble_global_output);
 #endif
     varAndIndices2mapParts(varAndIndices, nDim, sizes, mapInfo);
     (*singleAccessors)[i]->getOffset() = mapInfo.offset;
@@ -1474,11 +1619,12 @@ SEXP populateValueMapAccessorsFromNodeNames(SEXP StargetPtr, SEXP SnodeNames, SE
     (*singleAccessors)[i]->setObject( sourceNamedObject->getObjectPtr(varAndIndices.varName) );
 
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-    std::cout<< varAndIndices.varName <<" "<<mapInfo.offset<<", (";
-    for(int j = 0; j < mapInfo.sizes.size(); j++) std::cout<<mapInfo.sizes[j]<<",";
-    std::cout<<"), "<<(*singleAccessors)[i]->getLength()<<", (";
-    for(int j = 0; j < mapInfo.strides.size(); j++) std::cout<<mapInfo.strides[j]<<",";
-    std::cout<<"), "<<(*singleAccessors)[i]->getSingleton()<<".\n";
+    _nimble_global_output<< varAndIndices.varName <<" "<<mapInfo.offset<<", (";
+    for(int j = 0; j < mapInfo.sizes.size(); j++) _nimble_global_output<<mapInfo.sizes[j]<<",";
+    _nimble_global_output<<"), "<<(*singleAccessors)[i]->getLength()<<", (";
+    for(int j = 0; j < mapInfo.strides.size(); j++) _nimble_global_output<<mapInfo.strides[j]<<",";
+    _nimble_global_output<<"), "<<(*singleAccessors)[i]->getSingleton()<<".\n";
+    nimble_print_to_R(_nimble_global_output);
 #endif
 
 
@@ -1486,7 +1632,8 @@ SEXP populateValueMapAccessorsFromNodeNames(SEXP StargetPtr, SEXP SnodeNames, SE
   }
   valuesAccessor->getTotalLength() = totalLength;
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-  std::cout<<totalLength<<"\n";
+  _nimble_global_output<<totalLength<<"\n";
+  nimble_print_to_R(_nimble_global_output);
 #endif
   return(R_NilValue);
 }
@@ -1504,7 +1651,8 @@ SEXP populateValueMapAccessors(SEXP StargetPtr, SEXP SsourceList, SEXP SModelOrM
   int totalLength = 0;
 
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-  std::cout<<"Old: "<<numAccessors<<"\n";
+  _nimble_global_output<<"Old: "<<numAccessors<<"\n";
+  nimble_print_to_R(_nimble_global_output);
 #endif
 
   
@@ -1519,18 +1667,20 @@ SEXP populateValueMapAccessors(SEXP StargetPtr, SEXP SsourceList, SEXP SModelOrM
     varName = STRSEXP_2_string(VECTOR_ELT(SoneSource, 3), 0);
     (*singleAccessors)[i]->setObject( sourceNamedObject->getObjectPtr(varName) );
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-    std::cout<< varName <<" "<<(*singleAccessors)[i]->getOffset()<<", (";
-    for(int j = 0; j < (*singleAccessors)[i]->getSizes().size(); j++) std::cout<<(*singleAccessors)[i]->getSizes()[j]<<",";
-    std::cout<<"), "<<(*singleAccessors)[i]->getLength()<<", (";
-    for(int j = 0; j < (*singleAccessors)[i]->getStrides().size(); j++) std::cout<<(*singleAccessors)[i]->getStrides()[j]<<",";
-    std::cout<<"), "<<(*singleAccessors)[i]->getSingleton()<<".\n";
+    _nimble_global_output<< varName <<" "<<(*singleAccessors)[i]->getOffset()<<", (";
+    for(int j = 0; j < (*singleAccessors)[i]->getSizes().size(); j++) _nimble_global_output<<(*singleAccessors)[i]->getSizes()[j]<<",";
+    _nimble_global_output<<"), "<<(*singleAccessors)[i]->getLength()<<", (";
+    for(int j = 0; j < (*singleAccessors)[i]->getStrides().size(); j++) _nimble_global_output<<(*singleAccessors)[i]->getStrides()[j]<<",";
+    _nimble_global_output<<"), "<<(*singleAccessors)[i]->getSingleton()<<".\n";
+    nimble_print_to_R(_nimble_global_output);
 #endif
 
     UNPROTECT(1);
   }
   valuesAccessor->getTotalLength() = totalLength;
 #ifdef _DEBUG_POPULATE_MAP_ACCESSORS
-  std::cout<<totalLength<<"\n";
+  _nimble_global_output<<totalLength<<"\n";
+  nimble_print_to_R(_nimble_global_output);
 #endif
 
   return(R_NilValue);

@@ -29,13 +29,24 @@ samplerSpec <- setRefClass(
             control <<- control
             targetAsScalar <<- model$expandNodeNames(target, returnScalarComponents = TRUE)
         },
+        setName = function(name) name <<- name,
+        setSamplerFunction = function(fun) samplerFunction <<- fun,
+        setTarget = function(target, model) {
+            target <<- target
+            targetAsScalar <<- model$expandNodeNames(target, returnScalarComponents = TRUE)
+        },
+        setControl = function(control) control <<- control,
         buildSampler = function(model, mvSaved) {
             samplerFunction(model=model, mvSaved=mvSaved, target=target, control=control)
         },
         toStr = function() {
             tempList <- list()
             tempList[[paste0(name, ' sampler')]] <- paste0(target, collapse = ', ')
-            mcmc_listContentsToStr(c(tempList, control))
+            infoList <- c(tempList, control)
+            mcmc_listContentsToStr(infoList)
+        },
+        show = function() {
+            cat(toStr())
         }
     )
 )
@@ -46,7 +57,7 @@ samplerSpec <- setRefClass(
 ## NOTE: the empty lines are important in the final formatting, so please don't remove any of them in your own help info
 
 #' Class \code{MCMCspec}
-#' @aliases MCMCspec addSampler removeSamplers setSamplers getSamplers addMonitors addMonitors2 resetMonitors getMonitors setThin setThin2
+#' @aliases MCMCspec addSampler removeSamplers setSamplers printSamplers getSamplers addMonitors addMonitors2 resetMonitors getMonitors setThin setThin2
 #' @export
 #' @description
 #' Objects of this class specify an MCMC algorithm, specific to a particular model.  Objects are normally created by calling \link{configureMCMC}.
@@ -68,7 +79,7 @@ samplerSpec <- setRefClass(
 #' spec$setThin(5)
 #' spec$setThin2(10)
 #' spec$getMonitors()
-#' spec$getSamplers()
+#' spec$printSamplers()
 MCMCspec <- setRefClass(
     
     Class = 'MCMCspec',                           
@@ -127,11 +138,9 @@ thin2: The thinning interval for \'monitors2\'.  Default value is one.
 
 useConjugacy: A logical argument, with default value TRUE.  If specified as FALSE, then no conjugate samplers will be used, even when a node is determined to be in a conjugate relationship.
 
-onlyRW: A logical argument, with default value FALSE.  If specified as TRUE, then Metropolis-Hastings random walk samplers (sampler_RW) will be assigned for all non-terminal continuous-valued nodes nodes.
-Discrete-valued nodes are assigned a slice sampler (sampler_slice), and terminal (predictive) nodes are assigned an end sampler (sampler_end).
+onlyRW: A logical argument, with default value FALSE.  If specified as TRUE, then Metropolis-Hastings random walk samplers will be assigned for all non-terminal continuous-valued nodes nodes. Discrete-valued nodes are assigned a slice sampler, and terminal nodes are assigned a posterior_predictive sampler.
 
-onlySlice: A logical argument, with default value FALSE.  If specified as TRUE, then a slice sampler is assigned for all non-terminal nodes.
-Terminal (predictive) nodes are still assigned an end sampler (sampler_end).
+onlySlice: A logical argument, with default value FALSE.  If specified as TRUE, then a slice sampler is assigned for all non-terminal nodes. Terminal nodes are still assigned a posterior_predictive sampler.
 
 multivariateNodesAsScalars: A logical argument, with default value FALSE.  If specified as TRUE, then non-terminal multivariate stochastic nodes will have scalar samplers assigned to each of the scalar components of the multivariate node.  The default value of FALSE results in a single block sampler assigned to the entire multivariate node.  Note, multivariate nodes appearing in conjugate relationships will be assigned the corresponding conjugate sampler (provided useConjugacy == TRUE), regardless of the value of this argument.
 
@@ -139,7 +148,12 @@ print: A logical argument, specifying whether to print the ordered list of defau
 '
             
             samplerSpecs <<- list(); controlDefaults <<- list(); controlNamesLibrary <<- list(); monitors <<- character(); monitors2 <<- character();
-            model <<- model
+            ##model <<- model
+            if(is(model, 'RmodelBaseClass')) {
+                model <<- model
+            } else if(is(model, 'CmodelBaseClass')) {
+                model <<- model$Rmodel
+            } else stop('\'model\' must be a compiled or un-compiled NIMBLE model object')
             addMonitors( monitors,  print = FALSE)
             addMonitors2(monitors2, print = FALSE)
             thin  <<- thin
@@ -162,49 +176,55 @@ print: A logical argument, specifying whether to print the ordered list of defau
             for(i in seq_along(nodes)) {
             	node <- nodes[i]
                 discrete <- model$isDiscrete(node)
+                binary <- model$isBinary(node)
                 nodeScalarComponents <- model$expandNodeNames(node, returnScalarComponents = TRUE)
                 nodeLength <- length(nodeScalarComponents)
                 
-                ## if node has 0 stochastic dependents, assign 'end' sampler (e.g. for predictive nodes)
-             	if(isNodeEnd[i]) { addSampler(target = node, type = 'end', print = print);     next }
+                ## if node has 0 stochastic dependents, assign 'posterior_predictive' sampler (e.g. for predictive nodes)
+                if(isNodeEnd[i]) { addSampler(target = node, type = 'posterior_predictive');     next }
                 
                 ## for multivariate nodes, either add a conjugate sampler, or RW_block sampler
                 if(nodeLength > 1) {
                     if(useConjugacy) {
                         conjugacyResult <- conjugacyResultsAll[[node]]
                         if(!is.null(conjugacyResult)) {
-                            addConjugateSampler(conjugacyResult = conjugacyResult, print = print);     next }
+                            addConjugateSampler(conjugacyResult = conjugacyResult);     next }
                     }
                     if(multivariateNodesAsScalars) {
                         for(scalarNode in nodeScalarComponents) {
-                            addSampler(target = scalarNode, type = 'RW', print = print) };     next }
-                    addSampler(target = node, type = 'RW_block', print = print);     next }
+                            addSampler(target = scalarNode, type = 'RW') };     next }
+                    addSampler(target = node, type = 'RW_block');     next }
 
                 ## node is scalar, non-end node
-                if(onlyRW && !discrete)   { addSampler(target = node, type = 'RW',    print = print);     next }
-                if(onlySlice)             { addSampler(target = node, type = 'slice', print = print);     next }
+                if(onlyRW && !discrete)   { addSampler(target = node, type = 'RW'   );     next }
+                if(onlySlice)             { addSampler(target = node, type = 'slice');     next }
                 
                 ## if node passes checkConjugacy(), assign 'conjugate_dxxx' sampler
                 if(useConjugacy) {
                     conjugacyResult <- conjugacyResultsAll[[node]]
                     if(!is.null(conjugacyResult)) {
-                        addConjugateSampler(conjugacyResult = conjugacyResult, print = print);     next }
+                        addConjugateSampler(conjugacyResult = conjugacyResult);     next }
                 }
+
+                ## if node is discrete 0/1 (binary), assign 'binary' sampler
+                if(binary) { addSampler(target = node, type = 'binary');     next }
                 
                 ## if node distribution is discrete, assign 'slice' sampler
-                if(discrete) { addSampler(target = node, type = 'slice', print = print);     next }
+                if(discrete) { addSampler(target = node, type = 'slice');     next }
                 
                 ## default: 'RW' sampler
-                addSampler(target = node, type = 'RW', print = print);     next
+                addSampler(target = node, type = 'RW');     next
             }
             ##if(TRUE) { dynamicConjugateSamplerWrite(); message('don\'t forget to turn off writing dynamic sampler function file!') }
+            if(print)   printSamplers()
         },
 
-        addConjugateSampler = function(conjugacyResult, print) {
-            if(!getNimbleOption('useDynamicConjugacy')) {
-                addSampler(target = conjugacyResult$target, type = conjugacyResult$type, control = conjugacyResult$control, print = print)
-                return(NULL)
-            }
+        addConjugateSampler = function(conjugacyResult) {
+            ## update May 2016: old (non-dynamic) system is no longer supported -DT
+            ##if(!getNimbleOption('useDynamicConjugacy')) {
+            ##    addSampler(target = conjugacyResult$target, type = conjugacyResult$type, control = conjugacyResult$control)
+            ##    return(NULL)
+            ##}
             prior <- conjugacyResult$prior
             dependentCounts <- sapply(conjugacyResult$control, length)
             names(dependentCounts) <- gsub('^dep_', '', names(dependentCounts))
@@ -215,10 +235,10 @@ print: A logical argument, specifying whether to print the ordered list of defau
             }
             conjSamplerFunction <- dynamicConjugateSamplerGet(conjSamplerName)
             nameToPrint <- gsub('^sampler_', '', conjSamplerName)
-            addSampler(target = conjugacyResult$target, type = conjSamplerFunction, control = conjugacyResult$control, print = print, name = nameToPrint)
+            addSampler(target = conjugacyResult$target, type = conjSamplerFunction, control = conjugacyResult$control, name = nameToPrint)
         },
         
-        addSampler = function(target, type = 'RW', control = list(), print = TRUE, name) {
+        addSampler = function(target, type = 'RW', control = list(), print = FALSE, name) {
             '
 Adds a sampler to the list of samplers contained in the MCMCspec object.
 
@@ -243,13 +263,12 @@ Invisibly returns a list of the current sampler specifications, which are sample
 '
 
             if(is.character(type)) {
-                if(type == 'end') type <- 'sampler_end'  ## because 'end' is an R function
                 thisSamplerName <- gsub('^sampler_', '', type)   ## removes 'sampler_' from beginning of name, if present
-                if(exists(type)) {   ## try to find sampler function 'type'
+                if(exists(type) && is.nfGenerator(eval(as.name(type)))) {   ## try to find sampler function 'type'
                     samplerFunction <- eval(as.name(type))
                 } else {
                     sampler_type <- paste0('sampler_', type)   ## next, try to find sampler function 'sampler_type'
-                    if(exists(sampler_type)) {
+                    if(exists(sampler_type) && is.nfGenerator(eval(as.name(sampler_type)))) {   ## try to find sampler function 'sampler_type'
                         samplerFunction <- eval(as.name(sampler_type))
                     } else stop(paste0('cannot find sampler type \'', type, '\''))
                 }
@@ -273,11 +292,11 @@ Invisibly returns a list of the current sampler specifications, which are sample
             newSamplerInd <- length(samplerSpecs) + 1
             samplerSpecs[[newSamplerInd]] <<- samplerSpec(name=thisSamplerName, samplerFunction=samplerFunction, target=target, control=thisControlList, model=model)
             
-            if(print) getSamplers(newSamplerInd)
+            if(print) printSamplers(newSamplerInd)
             return(invisible(samplerSpecs))
         },
         
-        removeSamplers = function(ind, print = TRUE) {
+        removeSamplers = function(ind, print = FALSE) {
             '
 Removes one or more samplers from an MCMCspec object.
 
@@ -285,44 +304,51 @@ Arguments:
 
 ind: A numeric vector or character vector specifying the samplers to remove.  A numeric vector may specify the indices of the samplers to be removed.  Alternatively, a character vector may be used to specify a set of model nodes and/or variables, and all samplers whose \'target\' is among these nodes will be removed.  If omitted, then all samplers are removed.
 
-print: A logical argument, default value TRUE, specifying whether to print the current list of samplers once the removal has been done.
+print: A logical argument, default value FALSE, specifying whether to print the current list of samplers once the removal has been done.
 '      
             if(missing(ind))        ind <- seq_along(samplerSpecs)
             if(is.character(ind))   ind <- findSamplersOnNodes(ind)
             if(length(ind) > 0 && max(ind) > length(samplerSpecs)) stop('MCMC specification doesn\'t have that many samplers')
             samplerSpecs[ind] <<- NULL
-            if(print) getSamplers()
+            if(print) printSamplers()
             return(invisible(NULL))
         },
         
-        setSamplers = function(ind, print = TRUE) {
+        setSamplers = function(ind, print = FALSE) {
             '
 Sets the ordering of the list of MCMC samplers.
 
 Arguments:
 
 ind: A numeric vector or character vector.  A numeric vector may be used to specify the indicies for the new list of MCMC samplers, in terms of the current ordered list of samplers.
-For example, if the MCMCspec object currently has 3 samplers, then the ordering may be reversed by calling mcmcspec$setSamplers(3:1), or all samplers may be removed by calling mcmcspec$setSamplers(numeric(0)).  Alternatively, a character vector may be used to specify a set of model nodes and/or variables, and the sampler list will modified to only those samplers acting on these target nodes.
+For example, if the MCMCspec object currently has 3 samplers, then the ordering may be reversed by calling mcmcspec$setSamplers(3:1), or all samplers may be removed by calling mcmcspec$setSamplers(numeric(0)).
+
+Alternatively, a character vector may be used to specify a set of model nodes and/or variables, and the sampler list will modified to only those samplers acting on these target nodes.
+
+As another alternative, a list of samplerSpec objects may be used as the argument, in which case this ordered list of samplerSpec objects will define the samplers in this MCMC configuration object, completely over-writing the current list of samplers.  No checking is done to ensure the validity of the contents of these samplerSpec objects; only that all elements of the list argument are, in fact, samplerSpec objects.
 
 print: A logical argument, default value TRUE, specifying whether to print the new list of samplers.
 '   
             if(missing(ind))        ind <- numeric(0)
+            if(is.list(ind)) {
+                if(!all(sapply(ind, class) == 'samplerSpec')) stop('item in list argument to setSamplers is not a samplerSpec object')
+                samplerSpecs <<- ind
+                return(invisible(NULL))
+            }
             if(is.character(ind))   ind <- findSamplersOnNodes(ind)
             if(length(ind) > 0 && max(ind) > length(samplerSpecs)) stop('MCMC specification doesn\'t have that many samplers')
             samplerSpecs <<- samplerSpecs[ind]
-            if(print) getSamplers()
+            if(print) printSamplers()
             return(invisible(NULL))
         },
         
-        getSamplers = function(ind) {
+        printSamplers = function(ind) {
             '
 Prints details of the MCMC samplers.
 
 Arguments:
 
-ind: A numeric vector or character vector.  A numeric vector may be used to specify the indices of the samplers to print, or a character vector may be used to indicate a set of target nodes and/or variables, for which all samplers acting on these nodes will be printed. For example, getSamplers(\'x\') will print all samplers whose target is model node \'x\', or whose targets are contained (entirely or in part) in the model variable \'x\'.  If omitted, then all samplers are printed.
-
-Invisibly returns a list of the current sampler specifications for the specified samplers, which are samplerSpec reference class objects.
+ind: A numeric vector or character vector.  A numeric vector may be used to specify the indices of the samplers to print, or a character vector may be used to indicate a set of target nodes and/or variables, for which all samplers acting on these nodes will be printed. For example, printSamplers(\'x\') will print all samplers whose target is model node \'x\', or whose targets are contained (entirely or in part) in the model variable \'x\'.  If omitted, then all samplers are printed.
 '
             if(missing(ind))        ind <- seq_along(samplerSpecs)
             if(is.character(ind))   ind <- findSamplersOnNodes(ind)
@@ -330,8 +356,23 @@ Invisibly returns a list of the current sampler specifications for the specified
             makeSpaces <- if(length(ind) > 0) newSpacesFunction(max(ind)) else NULL
             for(i in ind)
                 cat(paste0('[', i, '] ', makeSpaces(i), samplerSpecs[[i]]$toStr(), '\n'))
-            if(length(ind) == 1) return(invisible(samplerSpecs[[ind]]))
-            return(invisible(samplerSpecs[ind]))
+            ##if(length(ind) == 1) return(invisible(samplerSpecs[[ind]]))
+            ##return(invisible(samplerSpecs[ind]))
+            return(invisible(NULL))
+        },
+
+        getSamplers = function(ind) {
+            '
+Returns a list of samplerSpec objects.
+
+Arguments:
+
+ind: A numeric vector or character vector.  A numeric vector may be used to specify the indices of the samplerSpec objects to return, or a character vector may be used to indicate a set of target nodes and/or variables, for which all samplers acting on these nodes will be returned. For example, getSamplers(\'x\') will return all samplerSpec objects whose target is model node \'x\', or whose targets are contained (entirely or in part) in the model variable \'x\'.  If omitted, then all samplerSpec objects in this MCMC configuration object are returned.
+'
+            if(missing(ind))        ind <- seq_along(samplerSpecs)
+            if(is.character(ind))   ind <- findSamplersOnNodes(ind)
+            if(length(ind) > 0 && max(ind) > length(samplerSpecs)) stop('MCMC specification doesn\'t have that many samplers')
+            return(samplerSpecs[ind])
         },
 
         findSamplersOnNodes = function(nodes) {
@@ -356,7 +397,7 @@ Returns a list object, containing the setup function, run function, and addition
                 ind <- ind[1]
             }
             if((ind <= 0) || (ind > length(samplerSpecs))) stop('Invalid sampler specified')
-            getSamplers(ind)
+            printSamplers(ind)
             def <- getDefinition(samplerSpecs[[ind]]$samplerFunction)
             return(def)
         },
@@ -550,16 +591,14 @@ Details: See the initialize() function
 #'@param thin The thinning interval for \code{monitors}.  Default value is one.
 #'@param thin2 The thinning interval for \code{monitors2}.  Default value is one.
 #'@param useConjugacy A logical argument, with default value TRUE.  If specified as FALSE, then no conjugate samplers will be used, even when a node is determined to be in a conjugate relationship.
-#'@param onlyRW A logical argument, with default value FALSE.  If specified as TRUE, then Metropolis-Hastings random walk samplers (\link{sampler_RW}) will be assigned for all non-terminal continuous-valued nodes nodes.
-#'Discrete-valued nodes are assigned a slice sampler (\link{sampler_slice}), and terminal (predictive) nodes are assigned an end sampler (\link{sampler_end}).
-#'@param onlySlice A logical argument, with default value FALSE.  If specified as TRUE, then a slice sampler is assigned for all non-terminal nodes.
-#'Terminal (predIctive) nodes are still assigned an end sampler (sampler_end).
+#'@param onlyRW A logical argument, with default value FALSE.  If specified as TRUE, then Metropolis-Hastings random walk samplers (\link{sampler_RW}) will be assigned for all non-terminal continuous-valued nodes nodes. Discrete-valued nodes are assigned a slice sampler (\link{sampler_slice}), and terminal nodes are assigned a posterior_predictive sampler (\link{sampler_posterior_predictive}).
+#'@param onlySlice A logical argument, with default value FALSE.  If specified as TRUE, then a slice sampler is assigned for all non-terminal nodes. Terminal nodes are still assigned a posterior_predictive sampler.
 #'@param multivariateNodesAsScalars A logical argument, with default value FALSE.  If specified as TRUE, then non-terminal multivariate stochastic nodes will have scalar samplers assigned to each of the scalar components of the multivariate node.  The default value of FALSE results in a single block sampler assigned to the entire multivariate node.  Note, multivariate nodes appearing in conjugate relationships will be assigned the corresponding conjugate sampler (provided \code{useConjugacy == TRUE}), regardless of the value of this argument.
 #'@param print A logical argument, specifying whether to print the ordered list of default samplers.
 #'@param autoBlock A logical argument specifying whether to use an automated blocking procedure to determine blocks of model nodes for joint sampling.  If TRUE, an MCMC specification object will be created and returned corresponding to the results of the automated parameter blocking.  Default value is FALSE.
 #'@param oldSpec An optional MCMCspec object to modify rather than creating a new MCMCspec from scratch
 #'@param ... Additional arguments to be passed to the \code{autoBlock()} function when \code{autoBlock = TRUE}
-#' @author Daniel Turek
+#'@author Daniel Turek
 #'@details See \code{MCMCspec} for details on how to manipulate the \code{MCMCspec} object
 configureMCMC <- function(model, nodes, control = list(), 
                           monitors, thin = 1, monitors2 = character(), thin2 = 1,
@@ -576,7 +615,7 @@ configureMCMC <- function(model, nodes, control = list(),
     if(missing(nodes))        nodes <- character()
     if(missing(monitors))     monitors <- NULL
 
-    if(autoBlock) return(autoBlock(model, ...)$spec)
+    if(autoBlock) return(autoBlock(model, ...)$conf)
     
     thisSpec <- MCMCspec(model = model, nodes = nodes, control = control, 
                          monitors = monitors, thin = thin, monitors2 = monitors2, thin2 = thin2,

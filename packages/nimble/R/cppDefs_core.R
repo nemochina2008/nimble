@@ -229,7 +229,8 @@ cppFunctionDef <- setRefClass('cppFunctionDef',
                                   virtual = 'ANY',
                                   static = 'ANY',
                                   abstract = 'ANY',
-                                  template = 'ANY'
+                                  template = 'ANY',
+                                  const = 'ANY'
                                             ),
                               methods = list(
                                   initialize = function(...) {
@@ -240,6 +241,7 @@ cppFunctionDef <- setRefClass('cppFunctionDef',
                                       if(inherits(abstract, 'uninitializedField')) abstract <<- FALSE
                                       if(inherits(template, 'uninitializedField')) template <<- NULL
                                       if(inherits(static, 'uninitializedField')) static <<- FALSE                                          
+                                      if(inherits(const, 'uninitializedField')) const <<- FALSE
                                   },
                                   generate = function(declaration = FALSE, scopes = character(), ...) {
                                       if(inherits(args, 'uninitializedField')) args <<- list()
@@ -247,6 +249,7 @@ cppFunctionDef <- setRefClass('cppFunctionDef',
                                       if(declaration) {
                                           outputCode <- paste0(if(virtual) 'virtual ' else character(0),
                                                                generateFunctionHeader(returnType, name, argsToUse, scopes, template, static, ...),
+                                                               if(const) ' const ' else character(0),
                                                                if(abstract) '= 0' else character(0), ';')
                                           if(!inherits(externC, 'uninitializedField' ) ){
                                             if(externC == TRUE)
@@ -258,7 +261,7 @@ cppFunctionDef <- setRefClass('cppFunctionDef',
                                               ## There is no code. This can occur for a nimbleFunctionVirtual, which is an abstract base class.
                                               return(character(0))
                                           }
-                                          c(paste(generateFunctionHeader(returnType, name, argsToUse, scopes, template, static = FALSE, ...), '{'),
+                                          c(paste(generateFunctionHeader(returnType, name, argsToUse, scopes, template, static = FALSE, ...), if(const) ' const ' else character(0), '{'),
                                             code$generate(...),
                                             list('}'))
                                       }

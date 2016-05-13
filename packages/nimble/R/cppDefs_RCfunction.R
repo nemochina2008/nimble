@@ -62,6 +62,7 @@ RCfunctionDef <- setRefClass('RCfunctionDef',
                                  buildFunction = function(RCfun, parentST = NULL) {
                                      RCfunProc <<- RCfun
                                      name <<- RCfunProc$name
+                                     const <<- RCfunProc$const
                                      argNames <- RCfunProc$compileInfo$origLocalSymTab$getSymbolNames() ## this has only the original arguments
                                      args <<- symbolTable2cppVars(RCfunProc$compileInfo$newLocalSymTab, argNames, include = argNames, parentST = parentST)
                                      allNames <- RCfunProc$compileInfo$newLocalSymTab$getSymbolNames() ## this has had local variables added
@@ -262,7 +263,7 @@ buildCopyLineFromSEXP <- function(fromSym, toSym) {
     if(inherits(toSym, 'symbolInternalType')) {
         thisInternalType <- as.character(toSym[['argList']][[1]])
         if(thisInternalType == 'indexedNodeInfoClass') {            
-            ans <- substitute(TO <- indexedNodeInfo(SEXP_2_vectorInt(FROM, 0)), list(TO = as.name(toSym$name),
+            ans <- substitute(TO <- indexedNodeInfo(SEXP_2_vectorDouble(FROM)), list(TO = as.name(toSym$name),
                                                                                      FROM = as.name(fromSym$name)))
             return(ans)
         } else{
@@ -293,7 +294,7 @@ buildCopyLineToSEXP <- function(fromSym, toSym) {
     if(inherits(fromSym, 'symbolInternalType')) {
         thisInternalType <- as.character(fromSym[['argList']][[1]])
         if(thisInternalType == 'indexedNodeInfoClass') {
-            ans <- substitute(PROTECT(TO <- (vectorInt_2_SEXP(FROM))), list(TO = as.name(toSym$name),
+            ans <- substitute(PROTECT(TO <- (vectorDouble_2_SEXP(FROM))), list(TO = as.name(toSym$name),
                                                                             FROM = as.name(fromSym$name) ) )
             return(ans)
         } else {

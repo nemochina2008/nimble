@@ -52,13 +52,58 @@ class NodeVectorClassNew {
 // utilities for calling node functions from a vector of node pointers
 // see .cpp file for definitions
 double calculate(NodeVectorClassNew &nodes);
+double calculate(NodeVectorClassNew &nodes, int iNodeFunction);
+double calculateDiff(NodeVectorClassNew &nodes);
+double calculateDiff(NodeVectorClassNew &nodes, int iNodeFunction);
+double getLogProb(NodeVectorClassNew &nodes);
+double getLogProb(NodeVectorClassNew &nodes, int iNodeFunction);
+void simulate(NodeVectorClassNew &nodes);
+void simulate(NodeVectorClassNew &nodes, int iNodeFunction);
 
-/* double calculate(NodeVectorClass &nodes); */
-/* double calculateDiff(NodeVectorClass &nodes); */
-/* //double calculateFaster(NodeVectorClass &nodes); */
-/* double getLogProb(NodeVectorClass &nodes); */
-/* void simulate(NodeVectorClass &nodes); */
+// ideas on efficiency
+/* ## could propagate const-ness through getParam_0D_double_block etc. - that helped */
+/* ## could pull getParam implementations back to .h for inlining. */
+/*  ## could make a const version of operator[] and operator() for NimArray's */
+/*  ## the getParam_..._block is not needed. -skipping this didn't help   */
+/*  ## could do this all on a new branch of newNodeFxn to be able to compare */
+/*  ## instead of the extra argument with default 0, use overloaded versions - might have helped - didn't compare carefully */
+/*  ## try making all calculate, simulate etc. const */
+ 
 
+// for these, if there is use of iNodeFunction, it is generated directly from cppOutputGetParam
+//getParam_0D
+inline double getParam_0D_double(int paramID, const oneNodeUseInfo &useInfo) {
+  return(useInfo.nodeFunPtr->getParam_0D_double_block(paramID, useInfo.useInfo));
+  //return(useInfo.nodeFunPtr->getParam_0D_double(paramID, (*(useInfo.nodeFunPtr->getIndexedNodeInfoTablePtr()))[ useInfo.useInfo.indicesForIndexedNodeInfo[0] ] ) );
+};
+inline double getParam_0D_double(int paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) { 
+  /* iNodeFunction sometimes needs to be generated in a call even if not needed */
+  /* but we want to avoid compiled warnings about an unused argument */
+  /* the following line of code tries to make the compiler think iNodeFunction will be used */
+  if(iNodeFunction) paramID += 0;
+  return(useInfo.nodeFunPtr->getParam_0D_double_block(paramID, useInfo.useInfo));
+};
+template<typename paramIDtype>
+inline double getParam_0D_double(const paramIDtype &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction) {
+return(useInfo.nodeFunPtr->getParam_0D_double_block(paramID[iNodeFunction], useInfo.useInfo));
+};
+
+//template inline double getParam_0D_double<NimArr<1, int> >(const NimArr<1, int> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+//template inline double getParam_0D_double<NimArr<1, double> >(const NimArr<1, double> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+
+//getParam_1D
+NimArr<1, double> getParam_1D_double(int paramID, const oneNodeUseInfo &useInfo, int iNodeFunction = 0);
+template<typename paramIDtype>
+NimArr<1, double> getParam_1D_double(const paramIDtype &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+extern template NimArr<1, double> getParam_1D_double<NimArr<1, int> >(const NimArr<1, int> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+extern template NimArr<1, double> getParam_1D_double<NimArr<1, double> >(const NimArr<1, double> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+
+//getParam_2D
+NimArr<2, double> getParam_2D_double(int paramID, const oneNodeUseInfo &useInfo, int iNodeFunction = 0);
+template<typename paramIDtype>
+NimArr<2, double> getParam_2D_double(const paramIDtype &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+extern template NimArr<2, double> getParam_2D_double<NimArr<1, int> >(const NimArr<1, int> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
+extern template NimArr<2, double> getParam_2D_double<NimArr<1, double> >(const NimArr<1, double> &paramID, const oneNodeUseInfo &useInfo, int iNodeFunction);
 
 /////////////////////
 // new version of variable accessors using maps (offset and strided windows into multivariate objects (NimArr<>s) )
@@ -478,9 +523,10 @@ void nimCopyOneTyped(SingleVariableAccessBase *fromSVA, SingleVariableAccessBase
   NimArrBase<Tfrom> *fromNimPtr = static_cast<NimArrBase<Tfrom> *> ( (fromSVA)->getNimArrPtr() ); //	I don't believe static casting should be necessary
   NimArrBase<Tto>  *toNimPtr = static_cast<NimArrBase<Tto> *> ( (toSVA)->getNimArrPtr() );		//	Same
   if(fromSVA->getLength() != toSVA->getLength()) {
-    cout<<"Error in nimCopyOneTyped: lengths do not match.\n";
-    cout << "FromLength = " << fromSVA->getLength() << " ToLength = "<< toSVA->getLength() << "\n";
-  	return;
+    _nimble_global_output<<"Error in nimCopyOneTyped: lengths do not match.\n";
+    _nimble_global_output << "FromLength = " << fromSVA->getLength() << " ToLength = "<< toSVA->getLength() << "\n";
+    nimble_print_to_R(_nimble_global_output);
+    return;
   }
   if(fromSVA->getLength() == 1) {
     (*toNimPtr)[toSVA->getIndexStart()] = (*fromNimPtr)[fromSVA->getIndexStart()];

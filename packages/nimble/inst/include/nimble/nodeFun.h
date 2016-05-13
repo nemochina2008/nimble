@@ -6,19 +6,19 @@
 // typically we'll have a vector of these in a node function or some such way of packaging information 
 class indexedNodeInfo {
  public:
-  vector<int> info;
+  vector<double> info; // although the main purposes of this is for indices, it will sometimes hold constants (sometimes from partially evaluated expressions)
   indexedNodeInfo() {};
   template<typename itertype>
     indexedNodeInfo(itertype iStart, int ncol, int stride = 1) {
-    std::cout<<"in templated constructor for indexedNodeInfo iStart "<<iStart<<" ncol "<<ncol<<" stride "<<stride<< "\n";
+    //  std::cout<<"in templated constructor for indexedNodeInfo iStart "<<iStart<<" ncol "<<ncol<<" stride "<<stride<< "\n";
     info.reserve(ncol);
     for(int i = 0; i < ncol; i++, iStart += stride) {
-      std::cout<<"pushing back "<<*iStart<<"\n";
+      //      std::cout<<"pushing back "<<*iStart<<"\n";
       info.push_back(*iStart);
     }
   }
-  indexedNodeInfo(vector<int> newinfo) {info = newinfo;};
-  operator vector<int>() const {return(info);}
+  indexedNodeInfo(vector<double> newinfo) {info = newinfo;};
+  operator vector<double>() const {return(info);}
 };
 
 // this will be the information for a block of indexedNodeInfo to use within one call to a new node function to trigger operations for one or more nodes 
@@ -46,7 +46,7 @@ class nodeFun : public NamedObjects {
  public:  // etc. put iNI into all cases
   vector<indexedNodeInfo> indexedNodeInfoTable;
   vector<indexedNodeInfo> *getIndexedNodeInfoTablePtr() {return(&indexedNodeInfoTable);}
-  virtual void shout() {PRINTF("shouting\n");}
+  // virtual void shout() {PRINTF("shouting\n");}
   // carry these here to allow compilation for now -- can the old and new systems coexist?
    /* virtual double calculate()=0;  */
    /* virtual double calculateDiff()=0; */
@@ -56,37 +56,62 @@ class nodeFun : public NamedObjects {
    /* virtual NimArr<1, double> getParam_1D_double(int paramID) {NimArr<1, double> ans; return(ans);} */
    /* virtual NimArr<2, double> getParam_2D_double(int paramID) {NimArr<2, double> ans; return(ans);} */
   
-  /* virtual double getParam_0D_double(int paramID, const indexedNodeInfo &iNI) {return(0./0.);} */
-  /* virtual NimArr<1, double> getParam_1D_double(int paramID) {NimArr<1, double> ans; return(ans);} */
-  /* virtual NimArr<2, double> getParam_2D_double(int paramID) {NimArr<2, double> ans; return(ans);} */
-
   nodeFun() {
     namedObjects["indexedNodeInfoTable"] = getIndexedNodeInfoTablePtr();
   };
   
-  virtual double calculate(const indexedNodeInfo &iNI)=0;
-  virtual double calculateDiff(const indexedNodeInfo &iNI)=0;
-  virtual void simulate(const indexedNodeInfo &iNI)=0;
-  virtual double getLogProb(const indexedNodeInfo &iNI)=0;
+  virtual double calculate(const indexedNodeInfo &iNI) const =0;
+  virtual double calculateDiff(const indexedNodeInfo &iNI) const =0;
+  virtual void simulate(const indexedNodeInfo &iNI) const =0;
+  virtual double getLogProb(const indexedNodeInfo &iNI) const =0;
 
-  // same for calculateDiff, simulate and getLogProb
-  double calculateBlock(const useInfoForIndexedNodeInfo &biNI) {
-    // can handle different cases in the future, but for now it is all integer indices of indicesMatrix
+  virtual double getParam_0D_double(int paramID, const indexedNodeInfo &iNI) const {return(0./0.);} 
+  virtual NimArr<1, double> getParam_1D_double(int paramID, const indexedNodeInfo &iNI) const {NimArr<1, double> ans; return(ans);}
+  virtual NimArr<2, double> getParam_2D_double(int paramID, const indexedNodeInfo &iNI) const {NimArr<2, double> ans; return(ans);}
+
+  double calculateBlock(const useInfoForIndexedNodeInfo &biNI) const {
     double ans(0);
     vector<int>::const_iterator iIndex(biNI.indicesForIndexedNodeInfo.begin());
     vector<int>::const_iterator iIndexEnd(biNI.indicesForIndexedNodeInfo.end());
-    std::cout<<"length of useInfoForIndexedNodeInfo = "<<biNI.indicesForIndexedNodeInfo.size()<<"\n";
     for(; iIndex != iIndexEnd; iIndex++) {
-      std::cout<<"about to call calculate\n";
-      std::cout<<indexedNodeInfoTable.size()<<"\n";
-      std::cout<< *iIndex <<"\n";
-      std::cout<< indexedNodeInfoTable[ *iIndex ].info.size() <<":";
-      for(int iii = 0; iii < indexedNodeInfoTable[ *iIndex ].info.size(); iii++) std::cout<<indexedNodeInfoTable[ *iIndex ].info[iii]<<" ";
-      std::cout<<"\n";
       ans += calculate(indexedNodeInfoTable[ *iIndex ]);
     }
     return(ans);
-  }; // same implementation should work for all derived classes
+  }; 
+  double calculateDiffBlock(const useInfoForIndexedNodeInfo &biNI) const {
+    double ans(0);
+    vector<int>::const_iterator iIndex(biNI.indicesForIndexedNodeInfo.begin());
+    vector<int>::const_iterator iIndexEnd(biNI.indicesForIndexedNodeInfo.end());
+    for(; iIndex != iIndexEnd; iIndex++) {
+      ans += calculateDiff(indexedNodeInfoTable[ *iIndex ]);
+    }
+    return(ans);
+  }; 
+  double getLogProbBlock(const useInfoForIndexedNodeInfo &biNI) const {
+    double ans(0);
+    vector<int>::const_iterator iIndex(biNI.indicesForIndexedNodeInfo.begin());
+    vector<int>::const_iterator iIndexEnd(biNI.indicesForIndexedNodeInfo.end());
+    for(; iIndex != iIndexEnd; iIndex++) {
+      ans += getLogProb(indexedNodeInfoTable[ *iIndex ]);
+    }
+    return(ans);
+  }; 
+  void simulateBlock(const useInfoForIndexedNodeInfo &biNI) const {
+    vector<int>::const_iterator iIndex(biNI.indicesForIndexedNodeInfo.begin());
+    vector<int>::const_iterator iIndexEnd(biNI.indicesForIndexedNodeInfo.end());
+    for(; iIndex != iIndexEnd; iIndex++) {
+      simulate(indexedNodeInfoTable[ *iIndex ]);
+    }
+  };
+  double getParam_0D_double_block(int paramID, const useInfoForIndexedNodeInfo &biNI) const {
+    return(getParam_0D_double(paramID, indexedNodeInfoTable[ biNI.indicesForIndexedNodeInfo[0] ]));
+  }
+  NimArr<1, double> getParam_1D_double_block(int paramID, const useInfoForIndexedNodeInfo &biNI) const {
+    return(getParam_1D_double(paramID, indexedNodeInfoTable[ biNI.indicesForIndexedNodeInfo[0] ]));
+  }
+  NimArr<2, double> getParam_2D_double_block(int paramID, const useInfoForIndexedNodeInfo &biNI) const {
+    return(getParam_2D_double(paramID, indexedNodeInfoTable[ biNI.indicesForIndexedNodeInfo[0] ]));
+  }
 };
 
 

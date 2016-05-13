@@ -17,10 +17,12 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                           name = 'ANY',		#character
                                           RCfun = 'ANY', ##nfMethodRC
                                           nameSubList = 'ANY',
-                                          compileInfo = 'ANY' ## RCfunctionCompileClass``
+                                          compileInfo = 'ANY', ## RCfunctionCompileClass``
+                                          const = 'ANY'
                                           ),
                                       methods = list(
-                                          initialize = function(f = NULL, funName) {
+                                          initialize = function(f = NULL, funName, const = FALSE) {
+                                              const <<- const
                                               if(!is.null(f)) {
                                                   if(missing(funName)) {
                                                       sf <- substitute(f)
@@ -60,7 +62,12 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                               if(inherits(compileInfo$origLocalSymTab, 'uninitializedField')) {
                                                   setupSymbolTables()
                                               }
-                                          }))
+                                          },
+                                          printCode = function() {
+                                              writeCode(nimDeparse(compileInfo$nimExpr))
+                                          }
+                                      )
+                                      )
 
 RCfunction <- function(f, name = NA, returnCallable = TRUE) {
     if(is.na(name)) name <- rcFunLabelMaker()
@@ -165,6 +172,7 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                        
                                        ## build intermediate variables
                                        exprClasses_buildInterms(compileInfo$nimExpr)
+
                                        if(debug) {
                                            print('nimDeparse(compileInfo$nimExpr)')
                                            writeCode(nimDeparse(compileInfo$nimExpr))
@@ -181,7 +189,7 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                            print('lapply(compileInfo$typeEnv, function(x) x$show())')
                                            lapply(compileInfo$typeEnv, function(x) x$show())
                                            writeLines('***** READY FOR setSizes *****')
-                                      browser()
+                                           browser()
                                        }
 
                                        compileInfo$typeEnv[['neededRCfuns']] <<- list()

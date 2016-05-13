@@ -1,5 +1,5 @@
 assignmentAsFirstArgFuns <- c('nimArr_rmnorm_chol', 'nimArr_rwish_chol', 'nimArr_rmulti', 'nimArr_rdirch', 'getValues')
-
+operatorsAllowedBeforeIndexBracketsWithoutLifting <- c('map','dim','mvAccessRow','nfVar')
 sizeCalls <- c(makeCallList(binaryOperators, 'sizeBinaryCwise'),
                makeCallList(binaryMidLogicalOperators, 'sizeBinaryCwiseLogical'),
                makeCallList(binaryOrUnaryOperators, 'sizeBinaryUnaryCwise'),
@@ -50,8 +50,10 @@ sizeCalls <- c(makeCallList(binaryOperators, 'sizeBinaryCwise'),
                makeCallList(c('isnan','ISNAN','!','ISNA'), 'sizeScalarRecurse'),
                makeCallList(c('nimArr_dmnorm_chol', 'nimArr_dwish_chol', 'nimArr_dmulti', 'nimArr_dcat', 'nimArr_dinterval', 'nimArr_ddirch'), 'sizeScalarRecurse'),
                makeCallList(c('nimArr_rmnorm_chol', 'nimArr_rwish_chol', 'nimArr_rmulti', 'nimArr_rdirch'), 'sizeRmultivarFirstArg'),
-               makeCallList(c('calculate', 'calculateDiff', 'getLogProb', 'decide', 'size', 'getsize','getNodeFunctionIndexedInfo'), 'sizeScalar'),
-               makeCallList(c('simulate', 'blank', 'nfMethod', 'nimFunListAccess', 'getPtr'), 'sizeUndefined')
+               makeCallList(c('decide', 'size', 'getsize','getNodeFunctionIndexedInfo'), 'sizeScalar'),
+               makeCallList(c('calculate','calculateDiff', 'getLogProb'), 'sizeScalarModelOp'),
+               simulate = 'sizeSimulate',
+               makeCallList(c('blank', 'nfMethod', 'nimFunListAccess', 'getPtr'), 'sizeUndefined')
                )
 
 scalarOutputTypes <- list(decide = 'logical', size = 'integer', isnan = 'logical', ISNA = 'logical', '!' = 'logical', getNodeFunctionIndexedInfo = 'integer') # , nimArr_rcat = 'double', nimArr_rinterval = 'double')
@@ -182,12 +184,24 @@ sizemap <- function(code, symTab, typeEnv) {
 }
 
 sizeGetParam <- function(code, symTab, typeEnv) {
+    if(length(code$args) > 3) {
+        asserts <- recurseSetSizes(code, symTab, typeEnv, useArgs = c(FALSE, FALSE, FALSE, rep(TRUE, length(code$args)-3)))
+        for(i in 4:length(code$args)) {
+            if(inherits(code$args[[i]], 'exprClass')) {
+                if(code$args[[i]]$toEigenize=='yes') stop(exprClassProcessingErrorMsg(code, 'In sizeGetParam: There is an expression beyond the third argument that cannot be handled.  If it involve vectorized math, you need to do it separately, not in this expression.'), call. = FALSE)
+            }
+        }
+    } else {
+        asserts <- list()
+    }
+ 
+    
     paramInfoSym <- symTab$getSymbolObject(code$args[[3]]$name, inherits = TRUE)
     code$type <- paramInfoSym$paramInfo$type
     code$nDim <- paramInfoSym$paramInfo$nDim
     code$sizeExprs <- vector(mode = 'list', length = code$nDim)
     code$toEigenize <- 'no'
-    asserts <- list()
+
     if(!(code$caller$name %in% assignmentOperators)) {
         if(!is.null(code$caller$name))
             if(!(code$caller$name == '{')) ## could be on its own line -- useless but possible
@@ -571,7 +585,7 @@ sizeAssignAfterRecursing <- function(code, symTab, typeEnv, NoEigenizeMap = FALS
         }
     }
     test <- try(if(inherits(RHStype, 'uninitializedField') | length(RHStype)==0) {
-        stop(exprClassProcessingErrorMsg(code, paste0('In sizeAssignAfterRecursing:',RHSname, ' is not available or its output type is unknown.')), call. = FALSE)
+        stop(exprClassProcessingErrorMsg(code, paste0("In sizeAssignAfterRecursing: '",RHSname, "' is not available or its output type is unknown.")), call. = FALSE)
     })
     if(inherits(test, 'try-error')) browser()
     
@@ -759,6 +773,48 @@ sizeScalar <- function(code, symTab, typeEnv) {
     invisible(NULL)
 }
 
+sizeScalarModelOp <- function(code, symTab, typeEnv) {
+    if(length(code$args) > 1) {
+        asserts <- recurseSetSizes(code, symTab, typeEnv, useArgs = c(FALSE, rep(TRUE, length(code$args)-1)))
+        for(i in 2:length(code$args)) {
+            if(inherits(code$args[[i]], 'exprClass')) {
+                if(code$args[[i]]$toEigenize=='yes') stop(exprClassProcessingErrorMsg(code, 'In sizeScalarModelOp: There is an expression beyond the first argument that cannot be handled.  If it involve vectorized math, you need to do it separately, not in this expression.'), call. = FALSE)
+            }
+        }
+    } else {
+        asserts <- list()
+    }
+    if(code$args[[1]]$toEigenize == 'yes') {
+        asserts <- c(asserts, sizeInsertIntermediate(code, 1, symTab, typeEnv))
+    }
+    code$nDim <- 0
+    outputType <- scalarOutputTypes[[code$name]]
+    if(is.null(outputType)) code$type <- 'double'
+    else code$type <- outputType
+    code$sizeExprs <- list()
+    code$toEigenize <- 'maybe' ## a scalar can be eigenized or not
+    invisible(NULL)
+}
+
+sizeSimulate <- function(code, symTab, typeEnv) {
+    if(length(code$args) > 1) {
+        asserts <- recurseSetSizes(code, symTab, typeEnv, useArgs = c(FALSE, rep(TRUE, length(code$args)-1)))
+        for(i in 2:length(code$args)) {
+            if(inherits(code$args[[i]], 'exprClass')) {
+                if(code$args[[i]]$toEigenize=='yes') stop(exprClassProcessingErrorMsg(code, 'In sizeSimulate: There is an expression beyond the first argument that cannot be handled.  If it involve vectorized math, you need to do it separately, not in this expression.'), call. = FALSE)
+            }
+        }
+    } else {
+        asserts <- list()
+    }
+
+    code$nDim <- 0
+    code$type <- as.character(NA)
+    code$sizeExprs <- list()
+    code$toEigenize <- 'maybe'
+    return(asserts)
+}
+
 sizeScalarRecurse <- function(code, symTab, typeEnv) {
     ## use something different for distributionFuns
     asserts <- recurseSetSizes(code, symTab, typeEnv)
@@ -868,13 +924,21 @@ sizeIndexingBracket <- function(code, symTab, typeEnv) {
         }
     }
     ## did all dims get dropped?
-   if(length(code$sizeExprs)==0) {
-       code$sizeExprs <- list() ## it was a named, list.  this creates consistency. maybe unnecessary
-       ##needMap will be FALSE if we are in this clause
-       if(!code$args[[1]]$isName)
-           if(code$args[[1]]$name != 'map')
-                if(code$args[[1]]$name != 'dim') asserts <- c(asserts, sizeInsertIntermediate(code, 1, symTab, typeEnv))
-   }
+    if(length(code$sizeExprs)==0) {
+        code$sizeExprs <- list() ## it was a named, list.  this creates consistency. maybe unnecessary
+        ##needMap will be FALSE if we are in this clause
+        if(!code$args[[1]]$isName)
+##            if(code$args[[1]]$name != 'map')
+  ##              if(code$args[[1]]$name != 'dim') 
+            if(!(code$args[[1]]$name %in% operatorsAllowedBeforeIndexBracketsWithoutLifting)) {## 'mvAccessRow'){
+                ## At this point we have decided to lift, and the next two if()s determine if that is weird due to being on LHS of assignment
+                if(code$caller$name %in% assignmentOperators)
+                    if(code$callerArgID == 1)
+                        stop(exprClassProcessingErrorMsg(code, 'There is a problem on the left-hand side of an assignment'), call. = FALSE)
+                
+                asserts <- c(asserts, sizeInsertIntermediate(code, 1, symTab, typeEnv))
+            }
+    }
     
     code$toEigenize <- 'maybe'
     if(needMap) {
@@ -1059,7 +1123,7 @@ sizeUnaryCwiseSquare <- function(code, symTab, typeEnv) {
     }
     if(a1$nDim != 2) stop(exprClassProcessingErrorMsg(code, 'sizeUnaryCwiseSquare called with argument that is not a matrix.'), call. = FALSE)
     if(!identical(a1$sizeExprs[[1]], a1$sizeExprs[[2]])) {
-        asserts <- identityAssert(a1$sizeExprs[[1]], a1$sizeExprs[[2]], paste0("Run-time size error: expected ", nimDeparse(a1), " to be square.") )
+        asserts <- c(asserts, identityAssert(a1$sizeExprs[[1]], a1$sizeExprs[[2]], paste0("Run-time size error: expected ", nimDeparse(a1), " to be square.") ))
         if(is.integer(a1$sizeExprs[[1]])) {
             newSize <- a1$sizeExprs[[1]]
         } else {
@@ -1070,7 +1134,6 @@ sizeUnaryCwiseSquare <- function(code, symTab, typeEnv) {
             }
         }
     } else {
-        asserts <- NULL
         newSize <- a1$sizeExprs[[1]]
     }
     code$nDim <- 2
@@ -1206,26 +1269,29 @@ sizeMatrixMult <- function(code, symTab, typeEnv) {
     if(is.null(newAssert))
         return(asserts)
     else
-        return(c(list(identityAssert(a1$sizeExprs[[2]], a2$sizeExprs[[1]], assertMessage)), asserts))
+        return(c(asserts, list(newAssert)))
+     ##   return(c(list(identityAssert(a1$sizeExprs[[2]], a2$sizeExprs[[1]], assertMessage)), asserts))
 }
 
 sizeSolveOp <- function(code, symTab, typeEnv) { ## this is for solve(A, b) or forwardsolve(A, b). For inverse, use inverse(A), not solve(A)
     if(length(code$args) != 2) stop(exprClassProcessingErrorMsg(code, 'sizeSolveOp called with argument length != 2.'), call. = FALSE)
-    ## need promotion from vectors to matrices with asRow or asCol
+    asserts <- recurseSetSizes(code, symTab, typeEnv)
     a1 <- code$args[[1]]
     a2 <- code$args[[2]]
     if(!(inherits(a1, 'exprClass') & inherits(a2, 'exprClass'))) stop(exprClassProcessingErrorMsg(code, 'In sizeSolveOp: expecting both arguments to be exprClasses.'), call. = FALSE)
-    code$type <- 'double'
     if(a1$nDim != 2)  stop(exprClassProcessingErrorMsg(code, 'In sizeSolveOp: first argument to a matrix solver must be a matrix.'), call. = FALSE)
-    if(a2$nDim == 1) {
-        a2 <- insertExprClassLayer(code, 2, 'asCol', type = as$type)
-        a2$sizeExprs <- list(code$args[[2]]$sizeExprs[[1]], 1)
-        a1$nDim <- 2
-    }
-    code$nDim <- 2
-    code$sizeExprs <- c(a1$sizeExprs[[2]], a2$sizeExprs[[2]])
+    if(!any(a2$nDim == 1:2)) stop(exprClassProcessingErrorMsg(code, 'In sizeSolveOp: second argument to a matrix solver must be a vector or matrix.'), call. = FALSE)
+    code$type <- 'double'
+    code$nDim <- a2$nDim  ## keep the same dimension as the 2nd argument
+    if(code$nDim == 1) { code$sizeExprs <- c(a1$sizeExprs[[1]])
+                     } else { code$sizeExprs <- c(a1$sizeExprs[[1]], a2$sizeExprs[[2]]) }
+    code$toEigenize <- 'yes'
+    assertMessage <- paste0("Run-time size error: expected ", deparse(a1$sizeExprs[[1]]), " == ", deparse(a1$sizeExprs[[2]]))
+    assert1 <- identityAssert(a1$sizeExprs[[1]], a1$sizeExprs[[2]], assertMessage)
     assertMessage <- paste0("Run-time size error: expected ", deparse(a1$sizeExprs[[1]]), " == ", deparse(a2$sizeExprs[[1]]))
-    return(identityAssert(a1$sizeExprs[[1]], a2$sizeExprs[[1]], assertMessage))
+    assert2 <- identityAssert(a1$sizeExprs[[1]], a2$sizeExprs[[1]], assertMessage)
+    asserts <- c(asserts, assert1, assert2)
+    return(asserts)
 }
 
 ## deprecated and will be removed

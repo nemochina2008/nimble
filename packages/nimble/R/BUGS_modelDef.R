@@ -34,6 +34,7 @@ modelDefClass <- setRefClass('modelDefClass',
                                  constantsEnv = 'ANY', ## environment with constants, set in assignConstants()
                                  constantsList = 'ANY',  ## named list with constants, set in assignConstants()
                                  constantsNamesList = 'ANY', ## list of constants name objects, set in assignConstants()
+                                 constantsScalarNamesList = 'ANY', ## could eventually replace constantsNamesList. added for newNodeFxns
                                  dimensionsList = 'ANY',		#list		   ## list of provided dimension information, set in assignDimensions()
                                  contexts = 'ANY',				#list 			 ## list of BUGScontextClass objects
                                  declInfo = 'ANY',				#list				 ## list of BUGSdeclInfo objects
@@ -78,13 +79,13 @@ modelDefClass <- setRefClass('modelDefClass',
                                  addMissingIndexing             = function() {},
                                  removeTruncationWrapping       = function() {},
                                  expandDistributions            = function() {},
-                                 checkMultivarExpr          = function() {},
+                                 checkMultivarExpr              = function() {},
                                  processLinks                   = function() {},
                                  reparameterizeDists            = function() {},
-                                 addRemainingDotParams          = function() {},
                                  insertDistributionBounds       = function() {},
                                  replaceAllConstants            = function() {},
                                  liftExpressionArgs             = function() {},
+                                 addRemainingDotParams          = function() {},
                                  addIndexVarsToDeclInfo         = function() {},
                                  genSymbolicParentNodes         = function() {},
                                  genReplacementsAndCodeReplaced = function() {},
@@ -140,13 +141,14 @@ modelDefClass$methods(setupModel = function(code, constants, dimensions, debug =
     addMissingIndexing()              ## overwrites declInfo, using dimensionsList, fills in any missing indexing
     removeTruncationWrapping()        ## transforms T(ddist(),lower,upper) to put bounds into declInfo
     expandDistributions()             ## overwrites declInfo for stochastic nodes: calls match.call() on RHS      (uses distributions$matchCallEnv)
-    checkMultivarExpr()           ## checks that multivariate params are not expressions
+    checkMultivarExpr()               ## checks that multivariate params are not expressions
     processLinks()                    ## overwrites declInfo (*and adds*) for nodes with link functions           (uses linkInverses)
     reparameterizeDists()             ## overwrites declInfo when distribution reparameterization is needed       (uses distributions), keeps track of orig parameter in .paramName
-    addRemainingDotParams()           ## overwrites declInfo, adds any additional .paramNames which aren't there  (uses distributions)
-    insertDistributionBounds()        # put lower and upper into code expression
-    replaceAllConstants()             ## overwrites declInfo with constants replaced; only replaces scalar constants
+    insertDistributionBounds()        ## put lower and upper into code expression
+    replaceAllConstants()
     liftExpressionArgs()              ## overwrites declInfo (*and adds*), lifts expressions in distribution arguments to new nodes.  does NOT lift '.param' names
+    addRemainingDotParams()           ## overwrites declInfo, adds any additional .paramNames which aren't there  (uses distributions)
+    replaceAllConstants()             ## overwrites declInfo with constants replaced; only replaces scalar constants
     addIndexVarsToDeclInfo()          ## sets field declInfo[[i]]$indexVariableExprs from contexts.  must be after overwrites of declInfo
     genSymbolicParentNodes()          ## sets field declInfo[[i]]$symbolicParentNodes. must be after overwrites of declInfo
     genReplacementsAndCodeReplaced()  ## sets fields: declInfo[[i]]$replacements, $codeReplaced, $replacementNameExprs, $logProbNodeExpr
@@ -203,10 +205,19 @@ modelDefClass$methods(assignConstants = function(constants) {
         list2env(constants, constantsEnv)
         constantsList <<- constants
         constantsNamesList <<- lapply(ls(constants), as.name)
+        constantLengths <- unlist(lapply(constants, length))
+        if(any(constantLengths > 1)) {
+            iLong <- which(constantLengths > 1)
+            message(paste0('Constant(s) ', paste0(names(constants)[iLong], sep=" ", collapse = " "), ' are non-scalar and may be handled as data if necessary.'))
+            ## note some of the processing behind this message occurs in BUGSmodel between making the model def and the model
+            constantsScalarNamesList <<- constantsNamesList[-iLong]
+        } else
+            constantsScalarNamesList <<- constantsNamesList 
     } else {
         constantsList <<- list()
         names(constantsList) <<- character(0)
         constantsNamesList <<- list()
+        constantsScalarNamesList <<- list()
     }
 })
 modelDefClass$methods(assignDimensions = function(dimensions) {
@@ -340,6 +351,7 @@ modelDefClass$methods(splitConstantsAndData = function() {
         if(length(newDataVars)) {
             if(nimbleOptions('verbose')) cat("Detected", paste(newDataVars, collapse = ','), "as data within 'constants'.\n")
             constantsNamesList <<- constantsNamesList[!constantsNames %in% vars]
+            constantsScalarNamesList <<- constantsScalarNamesList[ !(as.character(constantsScalarNamesList) %in% newDataVars) ]
             constantsList[newDataVars] <<- NULL
             for(varName in newDataVars) eval(substitute(rm(varName, envir = constantsEnv), list(varName = varName)))
         }
@@ -554,6 +566,7 @@ modelDefClass$methods(reparameterizeDists = function() {
         if(!(distName %in% getDistributionsInfo('namesVector')))    stop('unknown distribution name: ', distName)      ## error if the distribution isn't something we recognize
         distRule <- getDistribution(distName)
         numArgs <- length(distRule$reqdArgs)
+        if(numArgs==0) next; ## a user-defined distribution might have 0 arguments
         newValueExpr <- quote(dist())       ## set up a parse tree for the new value expression
         newValueExpr[[1]] <- as.name(distName)     ## add in the distribution name
         newValueExpr[1 + (1:numArgs)] <- rep(NA, numArgs)      ## fill in the new parse tree with required arguments
@@ -641,7 +654,7 @@ modelDefClass$methods(insertDistributionBounds = function() {
     for(i in seq_along(declInfo)) {
         BUGSdecl <- declInfo[[i]]
         if(BUGSdecl$type != 'stoch' || !BUGSdecl$truncated) next
-
+        
         newValueExpr <- BUGSdecl$valueExpr   ## grab the RHS (distribution)
 
         nParams <- length(newValueExpr) 
@@ -1259,8 +1272,11 @@ splitVertices <- function(var2vertexID, unrolledBUGSindices, indexExprs = NULL, 
     allScalar <- TRUE
     vectorIndices <- lapply(parentIndexNamePieces, function(x) {if(is.list(x)) {allScalar <<- FALSE; return(TRUE)}; FALSE})
 
-    ## step 4 evaporated    
-    currentVertexCounts <- tabulate(var2vertexID, maxVertexID)
+        ## step 4 evaporated
+        if(all(is.na(var2vertexID)))
+            currentVertexCounts <- rep(0, maxVertexID)
+        else
+            currentVertexCounts <- tabulate(var2vertexID, max(max(var2vertexID, na.rm = TRUE), maxVertexID))
     ## 5. Set up initial table of vertexIDcounts
 
     ## 6. All scalar case: iterate or vectorize via cbind and put new vertexIDs over -1s
@@ -1630,7 +1646,8 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ##             for(i in 1:2) z[i] <- x[i]
     ##    From above, there is a nodeOrigID for "x[1:2]"
     ##    But now, based on the RHS usage of x[1] and x[2], there needs to be a separate vertexID for each of them
-    ##    
+    ##
+    if(debug) browser()
     nextVertexID <- maxOrigNodeID+1 ## origVertexIDs start after origNodeIDs.  These will be sorted later.
     for(iDI in seq_along(declInfo)) {  ## Iterate over BUGS declarations (lines)
         BUGSdecl <- declInfo[[iDI]]
@@ -1887,7 +1904,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     maps$types <<- types[newGraphID_2_oldGraphID]
     maps$notStoch <<- maps$types != 'stoch'
     maps$nodeNamesLHSall <<- nodeNamesLHSall
-    maps$nodeNamesRHSonly <<- nodeNamesRHSonly
+    maps$nodeNamesRHSonly <<- maps$graphID_2_nodeName[maps$types == 'RHSonly'] ##nodeNamesRHSonly
     maps$nodeNames <<- maps$graphID_2_nodeName
     if(any(duplicated(maps$nodeNames))) stop(paste0("Error building model, there are multiple definitions for nodes:", paste(maps$nodeNames[duplicated(maps$nodeNames)], collapse = ',')))
     if(debug) browser()
@@ -2022,7 +2039,8 @@ modelDefClass$methods(genVarInfo3 = function() {
             }
             if(varInfo[[rhsVar]]$nDim > 0) {
                 for(iDim in 1:varInfo[[rhsVar]]$nDim) {
-                    indexNamePieces <- BUGSdecl$parentIndexNamePieces[[iV]][[iDim]] 
+                    indexNamePieces <- BUGSdecl$parentIndexNamePieces[[iV]][[iDim]]
+                    if(is.null(indexNamePieces)) stop(paste0('There is a problem with some indexing in this line: ', deparse(BUGSdecl$codeReplaced), '.\nOne way this can happen is if you wanted to provide a vector of indices but did not include it in constants.'))
                     if(is.list(indexNamePieces)) { ## a list would be made if there is a ':' operator in the index expression
                         indsLow <- if(is.numeric(indexNamePieces[[1]])) indexNamePieces[[1]] else BUGSdecl$replacementsEnv[[ indexNamePieces[[1]] ]]
                         indsHigh <- if(is.numeric(indexNamePieces[[2]])) indexNamePieces[[2]] else BUGSdecl$replacementsEnv[[ indexNamePieces[[2]] ]]

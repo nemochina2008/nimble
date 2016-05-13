@@ -90,10 +90,12 @@ modelBaseClass <- setRefClass('modelBaseClass',
                                       unrolledIndices <- as.list(indicesMatrix[unrolledRowNumber, ])
                                       return(unrolledIndices)
                                   },
-
+                                  
                                   ## returns the text for the distribution of a stochastic node, e.g., 'dnorm'
-                                  getNodeDistribution = function(node) {
-                                      getDeclInfo(node)[[1]]$getDistributionName()
+                                  getNodeDistribution = function(nodes) {
+                                      if(length(nodes)==1) getDeclInfo(nodes)[[1]][['distributionName']]
+                                      else unlist(lapply(getDeclInfo(nodes), `[[`, 'distributionName'))
+                                      ##getDeclInfo(nodes)[[1]]$getDistributionName()
                                   },
 
                                   ## returns the expr corresponding to 'param' in the distribution of 'node'
@@ -123,6 +125,16 @@ modelBaseClass <- setRefClass('modelBaseClass',
                                       # explicit reference to namespace needed as class definition objects inheriting from modelBaseClass not in namespace
                                       discrete <- getDistribution(dist)$discrete
                                       return(discrete)
+                                  },
+
+                                  isBinary = function(node) {
+                                      dist <- getNodeDistribution(node)
+                                      if(dist == 'dbern') return(TRUE)
+                                      if(dist == 'dbin') {
+                                          if(getNodeParamExpr(node, 'size') == 1)
+                                              return(TRUE)
+                                      }
+                                      return(FALSE)
                                   },
 
                                   isTruncated = function(node) {
@@ -532,15 +544,16 @@ Checks for common errors in model specification, including missing values, inabi
                                               declInfo <- .self$modelDef$declInfo[[j]]
                                               nn <- length(declInfo$nodeFunctionNames)
                                               nfn <- declInfo$nodeFunctionNames[nn]
-                                              nf <- .self$nodeFunctions[[nfn]]
+                                              ## NEWNODEFXNS
+                                              nf <- .self$nodeFunctions[[j]]
                                               #context <- as.list(declInfo$unrolledIndicesMatrix[nrow(declInfo$unrolledIndicesMatrix), ])
 
                                               if(declInfo$type == 'determ') {
                                                   # check LHS and RHS are same size/dim
                                                   # need to eval within nf; constants not present otherwise
-                                                  RHSsize <- try(dimOrLength(eval(codeSubstitute(declInfo$valueExprReplaced, as.list(nf)))))
+                                                  RHSsize <- try(dimOrLength(eval(codeSubstitute(declInfo$valueExprReplaced, as.list(nf)))), silent = TRUE)
 
-                                                  LHSsize <- try(dimOrLength(eval(codeSubstitute(declInfo$targetExprReplaced, as.list(nf)))))
+                                                  LHSsize <- try(dimOrLength(eval(codeSubstitute(declInfo$targetExprReplaced, as.list(nf)))), silent = TRUE)
                                                   # apparently implicit dropping of size 1 dimensions is ok in determ node calcs
                                                   if(!is(RHSsize, 'try-error') && !is(LHSsize, 'try-error')) {
                                                       if(length(RHSsize) > 1 && any(RHSsize == 1))
@@ -551,10 +564,12 @@ Checks for common errors in model specification, including missing values, inabi
                                                       if(!identical(LHSsize, RHSsize))
                                                           stop("Size/dimension mismatch between left-hand side and right-hand size of BUGS expression: ", deparse(declInfo$code))
                                                   }
-                                                  if(is(RHSsize, 'try-error'))
-                                                      stop("Problem evaluating: ", deparse(declInfo$valueExprReplaced))
-                                                  if(is(LHSsize, 'try-error'))
-                                                      stop("Problem evaluating: ", deparse(declInfo$targetExprReplaced))
+                                                  ## these lines caused a problem for functions such as chol() in BUGS code
+                                                  ## removed by DT April 2016
+                                                  ##if(is(RHSsize, 'try-error'))
+                                                  ##    stop("Problem evaluating: ", deparse(declInfo$valueExprReplaced))
+                                                  ##if(is(LHSsize, 'try-error'))
+                                                  ##    stop("Problem evaluating: ", deparse(declInfo$targetExprReplaced))
                                               } else {
                                                   # check:
                                                   #   1) dims of param args match those in distInputList based on calculation
@@ -565,13 +580,15 @@ Checks for common errors in model specification, including missing values, inabi
                                                   distDims <- as.integer(sapply(getDistribution(dist)$types, function(x) x$nDim))
                                                   nms <- names(getDistribution(dist)$types)
                                                   names(distDims) <- nms
-
+                                                  
                                                   sizes <- list(); length(sizes) <- length(nms); names(sizes) <- nms
 
                                                   for(k in seq_along(nms)) {
                                         # sometimes get_foo not found in env of nf (and doesn't appear in ls(nf) )
-                                                      fun <- as.call(parse(text = paste0("nf$get_", nms[k])))
-                                                      e = try(eval(fun))
+                                                      ##fun <- as.call(parse(text = paste0("nf$get_", nms[k])))
+                                                      ##e = try(eval(fun))
+                                                      ## NEWNODEFXN
+                                                      e <- try(.self$getParam(nfn, nms[k]))
                                                       
                                                       if(!is(e, "try-error")) {
                                                           sizes[[nms[k]]] <- dimOrLength(e)
@@ -802,7 +819,10 @@ RmodelBaseClass <- setRefClass("RmodelBaseClass",
                                            logProbNodeExpr <- BUGSdecl$logProbNodeExpr
                                            logProbNodeExpr <- insertSingleIndexBrackets(logProbNodeExpr, modelDef$logProbVarInfo)
                                            setupOutputExprs <- BUGSdecl$replacementNameExprs
-                                           
+                                           ## ensure they are in the same order as the columns of the unrolledIndicesMatrix, because that is assumed in nodeFunctionNew
+                                           ## This can be necessary in a case like for(j in ...) for(i in ...) x[i,j] ~ ...; because x uses inner index first
+                                           if(nrow(BUGSdecl$unrolledIndicesMatrix) > 0)
+                                               setupOutputExprs <- setupOutputExprs[ colnames(BUGSdecl$unrolledIndicesMatrix) ]
                                            ## make a unique name
                                            thisNodeGeneratorName <- paste0(Rname2CppName(BUGSdecl$targetVarName), '_L', BUGSdecl$sourceLineNumber, '_', nimbleUniqueID())
                                            ## create the nimbleFunction generator (i.e. unspecialized nimbleFunction)
@@ -816,7 +836,7 @@ RmodelBaseClass <- setRefClass("RmodelBaseClass",
                                    },
                                    
                                    buildNodeFunctions_old = function(where = globalenv(), debug = FALSE) {
-                                       ## This xoocreates the nodeFunctions, which are basically nimbleFunctions, for the model
+                                       ## This creates the nodeFunctions, which are basically nimbleFunctions, for the model
                                        if(debug) browser()
                                        iNextNodeFunction <- 1
                                        nodeFunctions <<- vector('list', length = modelDef$numNodeFunctions)  ## for the specialized instances

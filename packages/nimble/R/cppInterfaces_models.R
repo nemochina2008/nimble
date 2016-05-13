@@ -46,7 +46,8 @@ CmodelBaseClass <- setRefClass('CmodelBaseClass',
                                    ##.nodeFxnPointers_byGID = 'ANY',
                                    .nodeFxnPointers_byDeclID = 'ANY',
                                    .nodeValPointers_byGID = 'ANY',
-                                   .nodeLogProbPointers_byGID = 'ANY'
+                                   .nodeLogProbPointers_byGID = 'ANY',
+                                   nodeFunctions = 'ANY' ## Added for newNodeFxns, so we can access nodeFunctions by declID. Could be migrated up to modelBaseClass.
                                    ),
                                methods = list(
                                    show = function() {
@@ -73,11 +74,15 @@ CmodelBaseClass <- setRefClass('CmodelBaseClass',
                                        ## 1. generate CnodeFunClasses
                                        ##     - by iterating through the nodeGenerators in the Rmodel
                                        nodesEnv <- new.env()
-                                       asTopLevel <- !getNimbleOption('useMultiInterfaceForNestedNimbleFunctions')
-                                       for(i in names(Rmodel$nodeFunctions)) {
-                                           nodesEnv[[i]] <- nimbleProject$instantiateNimbleFunction(Rmodel$nodes[[i]], dll = dll, asTopLevel = asTopLevel)
+                                       asTopLevel <- getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
+                                       nodeFunctions <<- vector('list', length(Rmodel$nodeFunctions))
+                                       for(i in seq_along(Rmodel$nodeFunctions)) {
+                                           thisNodeFunName <- names(Rmodel$nodeFunctions)[i]
+                                           nodesEnv[[thisNodeFunName]] <- nimbleProject$instantiateNimbleFunction(Rmodel$nodes[[thisNodeFunName]], dll = dll, asTopLevel = asTopLevel)
+                                           nodeFunctions[[i]] <<- nodesEnv[[thisNodeFunName]]
                                        }
                                        nodes <<- nodesEnv
+                                       names(nodeFunctions) <<- names(Rmodel$nodeFunctions)
                                        
                                        ##.nodeFxnPointers_byGID <<- new('numberedObjects')
                                        .nodeFxnPointers_byDeclID <<- new('numberedObjects') 
@@ -100,10 +105,12 @@ CmodelBaseClass <- setRefClass('CmodelBaseClass',
                                            .self$.nodeFxnPointers_byDeclID[declID] <- basePtr ## nodes[[nodeName]]$.basePtr
                                        }
 
+                                       maxGraphID <- length(modelDef$maps$graphIDs)
                                        .nodeValPointers_byGID <<- new('numberedModelVariableAccessors')
-                                       .nodeValPointers_byGID$resize(maxID)
+                                       .nodeValPointers_byGID$resize(maxGraphID)
                                        .nodeLogProbPointers_byGID <<- new('numberedModelVariableAccessors')
-                                       .nodeLogProbPointers_byGID$resize(maxID)
+                                       .nodeLogProbPointers_byGID$resize(maxGraphID)
+                                
                                        for(vName in Rmodel$getVarNames()){
                                        		flatIndices = 1
                                        		if(length(vars[vName]) > 0)
