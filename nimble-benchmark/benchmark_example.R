@@ -11,7 +11,7 @@ source('benchmark_suite.R')
 #'  will run only the 'seeds' MCMC test
 
 ## run with basic settings 
-tst <- benchmarkSuite(niter = c(100000, 10000), nparticles = 100000, nreps = 10, summarize = T, debug = F)
+tst <- benchmarkSuite(niter = c(500000, 500000), nparticles = 500000, nreps = 20, summarize = T, debug = F)
   
 ## only run MCMC benchmarks, using different numbers of iterations for each benchmark
 tst <- benchmarkSuite(PFtests = NULL, niter = c(100000, 10000), nreps = 10, summarize = T, debug = F)

@@ -248,7 +248,6 @@ nimBenchmarkClass <- setRefClass(
                       CmcmcFunction <- compileNimble(RmcmcFunction, project = RMCMCmodels[[MCMCtest]])
                   })
                   addTimeResult(MCMCtests[MCMCtest], 'nimble_compile', timeResult)
-                  browser()
                   if(setSeed) set.seed(0)
                   for(runNum in 1:nreps){
                     timeResult <- system.time({ CmcmcFunction$run(niter[MCMCtest])})
