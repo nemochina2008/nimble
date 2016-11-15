@@ -1270,10 +1270,10 @@ autoCodessClass_oldClass <- setRefClass(
                            
              
                                      
-            for(i in 1 : 1){
+            for(i in 1 : 3){
               print(keepTrackTemp)
               confList <- list(createConfFromGroups(DefaultSamplerList))
-              runConfListAndSaveBest(confList, paste0('auto',i), auto=TRUE)
+              runConfListAndSaveBest(confList, paste0('auto',i), auto=FALSE)
               leastMixing <- names(LeastIndex[[it]])
               print(leastMixing)
               if(bestEfficiency < essPT[[it]][LeastIndex[[it]]]){
@@ -1289,6 +1289,9 @@ autoCodessClass_oldClass <- setRefClass(
               } else{
                 DefaultSamplerList[[LeastIndex[[it]]]]$type <- 'sampler_RW_block'
                 keepTrackTemp[LeastIndex[[it]],6]<<-1
+                for(i in 1:6){
+                  keepTrackTemp[LeastIndex[[it]],i]<<-0
+                }
               }
               if(DefaultSamplerList[[LeastIndex[[it]]]]$type =='sampler_RW_block'  & length(DefaultSamplerList[[LeastIndex[[it]]]]$target)<2){
                  
@@ -1320,6 +1323,9 @@ autoCodessClass_oldClass <- setRefClass(
                
               
             }  
+            
+            
+                
                                         
                                  
             names(candidateGroups) <<- naming
@@ -1396,7 +1402,7 @@ determineCandidateGroupsFromCurrentSample = function() {
             print(LeastIndex[[it]])
            
             
-            if(TRUE) {
+            if(auto) {
                 ## slight hack here, to remove samples of any deterministic nodes...
                 samplesTEMP <- as.matrix(CmcmcList[[bestInd]]$mvSamples)
                 namesToKeep <- setdiff(dimnames(samplesTEMP)[[2]], abModel$Rmodel$getNodeNames(determOnly=TRUE, returnScalarComponents=TRUE))
@@ -1457,7 +1463,7 @@ determineCandidateGroupsFromCurrentSample = function() {
                   conf$addSampler(target = groups[[i]]$target,type = 'sampler_RW')
                 }
       
-              } else if(groups[[i]]$type=='sampler_RW_block' | length(groups[[i]]$target)>1 ){
+              } else if(length(groups[[i]]$target)>1 ){
       
                 conf$addSampler(target = groups[[i]]$target, type = 'sampler_AF_slice', control = list(sliceWidths = rep(.5, length(groups[[i]]$target) ), sliceFactorBurnInIters = 50,sliceFactorAdaptInterval = 50, sliceSliceAdaptIters = 50))
               } else{
