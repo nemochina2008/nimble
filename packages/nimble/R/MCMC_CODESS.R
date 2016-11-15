@@ -1290,22 +1290,30 @@ autoCodessClass_oldClass <- setRefClass(
                 DefaultSamplerList[[LeastIndex[[it]]]]$type <- 'sampler_RW_block'
                 keepTrackTemp[LeastIndex[[it]],6]<<-1
               }
-              GroupLM<-GroupOfLeastMixing(samples[[it]], leastMixing)
               if(DefaultSamplerList[[LeastIndex[[it]]]]$type =='sampler_RW_block'  & length(DefaultSamplerList[[LeastIndex[[it]]]]$target)<2){
                  
-                 
-                # if(length(GroupLM)>1){
-                #   print(GroupLM)
-                #   DefaultSamplerList[[LeastIndex[[it]]]]$target <- GroupLM
+                GroupLM<-GroupOfLeastMixing(samples[[it]], leastMixing)
+               
+                 if(length(GroupLM)>1){
+                   print(GroupLM)
+                  DefaultSamplerList[[LeastIndex[[it]]]]$target <- GroupLM
                    
-                # } else { ## Just block anything to test
+                 } else { ## Just block anything to test
                     print(c(names(essPT[[it]][LeastIndex[[it]]]),names(essPT[[it]][-LeastIndex[[it]]][1])))
                     DefaultSamplerList[[LeastIndex[[it]]]]$target <- c(names(essPT[[it]][LeastIndex[[it]]]),names(essPT[[it]][-LeastIndex[[it]]][1])) 
-                # }  
+                 }  
       
                  
                
                }
+               if(length(DefaultSamplerList[[LeastIndex[[it]]]]$target)>1){
+                 DefaultSamplerList[[LeastIndex[[it]]]]$type <- 'sampler_RW_block'
+               
+               }
+               print("Now, the sampler of the least mixing is:")
+               print(DefaultSamplerList[[LeastIndex[[it]]]]$type)
+               print("Efficiency is:")
+               print(bestEfficiency)
                
                
                
