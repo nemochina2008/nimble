@@ -1184,6 +1184,7 @@ autoCodessParamDefaults <- function() {
 }
 
 
+
 autoCodessClass_oldClass <- setRefClass(
     Class = 'autoCodessClass_oldClass',
     fields = list(
@@ -1198,6 +1199,7 @@ autoCodessClass_oldClass <- setRefClass(
         setSeed0 = 'logical',
         verbose = 'logical',
         ## persistant lists of historical data
+        keepTrack = 'list',
         naming = 'list',
         candidateGroups = 'list',
         grouping = 'list',
@@ -1216,7 +1218,8 @@ autoCodessClass_oldClass <- setRefClass(
         empCor = 'list',
         distMatrix = 'list',
         LeastIndex = 'list',
-        hTree = 'list'
+        hTree = 'list',
+        keepTrackTemp = 'matrix'
         ),
     methods = list(
         initialize = function(code, constants=list(), data=list(), inits=list(), control=list(),DefaultSamplerList=list(), CandidateSamplerList=list()) {
@@ -1228,47 +1231,22 @@ autoCodessClass_oldClass <- setRefClass(
             for(i in seq_along(defaultsList)) if(is.null(control[[names(defaultsList)[i]]])) control[[names(defaultsList)[i]]] <- defaultsList[[i]]
             for(i in seq_along(control)) eval(substitute(verbose <<- VALUE, list(verbose=as.name(names(control)[i]), VALUE=control[[i]])))
             it <<- 0
+            keepTrackTemp <<-matrix(0, ncol=length(CandidateSamplerList)+1, nrow= length(DefaultSamplerList))
+	          colnames(keepTrackTemp) <<-c(names(CandidateSamplerList),'Include')
+	          rownames(keepTrackTemp) <<-names(DefaultSamplerList)
+	          
         },
         run = function(candidateGroupsList) {
             abModel$createInitialMCMCconf()  ## here is where the initial MCMC conf is created, for re-use -- for new version
             
 	          oldConf = abModel$initialMCMCconf
 	    
-	          bestEfficiency = c(a=0)
-            count =0
-            bestIndex=0
-	          
+	    
 	          autoIt <- 1
                                      
-            for(i in 1 : 5){
-              confList <- list(createConfFromGroups(DefaultSamplerList))
-              runConfListAndSaveBest(confList, paste0('auto',i), auto=FALSE)
-               if(bestEfficiency < essPT[[it]][LeastIndex[[it]]]){
-                 bestEfficiency <- essPT[[it]][LeastIndex[[it]]]
-               } 
-               index <- it %% 5 + 1
-               if(DefaultSamplerList[[LeastIndex[[it]]]]$type != CandidateSamplerList[[index]]$type){
-                 DefaultSamplerList[[LeastIndex[[it]]]]$type <<- CandidateSamplerList[[index]]$type
-               } else {
-                 index <- index %% 5 + 1
-                 DefaultSamplerList[[LeastIndex[[it]]]]$type <<- CandidateSamplerList[[index]]$type
-               }
-               if(DefaultSamplerList[[LeastIndex[[it]]]]$type =='sampler_RW_block'  & length(DefaultSamplerList[[LeastIndex[[it]]]]$target)<2){
-                 index <- index %% 5 + 1
-                 DefaultSamplerList[[LeastIndex[[it]]]]$type <<- CandidateSamplerList[[index]]$type
-               
-               }
-               if(length(DefaultSamplerList[[LeastIndex[[it]]]]$target)>1){
-                 DefaultSamplerList[[LeastIndex[[it]]]]$type <<- 'sampler_RW_block'
-               
-               }
-               
-               
-               
-               
-              
-            }  
-                           
+            confList <- list(createConfFromGroups(DefaultSamplerList))
+              runConfListAndSaveBest(confList, paste0('auto',i), auto=TRUE)
+                                         
                                  
             names(candidateGroups) <<- naming
             names(grouping) <<- naming
@@ -1340,9 +1318,7 @@ determineCandidateGroupsFromCurrentSample = function() {
             sds[[it]] <<- sdsList[[bestInd]]
             ess[[it]] <<- essList[[bestInd]]
             essPT[[it]] <<- sort(essPTList[[bestInd]])
-            LeastIndex[[it]] <<- which.min(essPT[[it]])
-            print(LeastIndex[[it]])
-            if(auto) {
+            if(TRUE) {
                 ## slight hack here, to remove samples of any deterministic nodes...
                 samplesTEMP <- as.matrix(CmcmcList[[bestInd]]$mvSamples)
                 namesToKeep <- setdiff(dimnames(samplesTEMP)[[2]], abModel$Rmodel$getNodeNames(determOnly=TRUE, returnScalarComponents=TRUE))
@@ -1352,6 +1328,7 @@ determineCandidateGroupsFromCurrentSample = function() {
                 empCor[[it]] <<- cov2cor(empCov[[it]])
                 distMatrix[[it]] <<- as.dist(1 - abs(empCor[[it]]))
                 hTree[[it]] <<- hclust(distMatrix[[it]], method = 'complete')
+                print(hTree[[it]])
             }
             if(!saveSamples) burnedSamples[[it]] <<- NA
             if(verbose) printCurrent(name, confList[[bestInd]])
@@ -1396,13 +1373,13 @@ determineCandidateGroupsFromCurrentSample = function() {
             n = length(groups)
             for (i in 1:n){
               if(regexpr('conjugate', groups[[i]]$type)>0){
-                #if(i<0){
-                #  conf$addSampler(target = groups[[i]]$target,type = 'sampler_conjugate', control=list())
-                #} else {
+                if(i<0){
+                  conf$addSampler(target = groups[[i]]$target,type = 'sampler_conjugate', control=list())
+                } else {
                   conf$addSampler(target = groups[[i]]$target,type = 'sampler_RW')
-               # }
+                }
       
-              } else if(groups[[i]]$type=='sampler_RW_block'){
+              } else if(groups[[i]]$type=='sampler_RW_block' | length(groups[[i]]$target)>1 ){
       
                 conf$addSampler(target = groups[[i]]$target, type = 'sampler_AF_slice', control = list(sliceWidths = rep(.5, length(groups[[i]]$target) ), sliceFactorBurnInIters = 50,sliceFactorAdaptInterval = 50, sliceSliceAdaptIters = 50))
               } else{
@@ -1468,28 +1445,6 @@ determineCandidateGroupsFromCurrentSample = function() {
         }
         )
 )
-
-
-
-addSamplerToConf <- function(Rmodel, conf, nodeGroup) {
-    if(length(nodeGroup) > 1) {
-        conf$addSampler(type = 'sampler_RW_block', target = nodeGroup, print = FALSE); return()
-    }
-  #  if(!(nodeGroup %in% Rmodel$getNodeNames())) {
-  #      conf$addSampler(type = 'RW', target = nodeGroup, print = FALSE); return()
-  #  }
-  #  if(nodeGroup %in% Rmodel$getMaps('nodeNamesEnd')) {
-        ##cat(paste0('warning: using \'end\' sampler for node ', nodeGroup, ' may lead to results we don\'t want\n\n'))
-  #      conf$addSampler(type = 'end', target = nodeGroup, print = FALSE); return()
-  #  }
-  #  if(Rmodel$isDiscrete(nodeGroup)) {
-  #      conf$addSampler(type = 'slice', target = node, print = FALSE); return()
-  #  }
- #   if(length(Rmodel$expandNodeNames(nodeGroup, returnScalarComponents = TRUE)) > 1) {
-  #      conf$addSampler(type = 'RW_block', target = nodeGroup, print = FALSE); return()
-  #  }
-    conf$addSampler(type = 'sampler_RW', target = nodeGroup, print = FALSE); return()
-}
 
 
 
