@@ -1242,11 +1242,77 @@ autoCodessClass_oldClass <- setRefClass(
 	          oldConf = abModel$initialMCMCconf
 	    
 	    
+	          bestEfficiency = c(a=0)
+            count =0
+            bestIndex=0
 	          autoIt <- 1
+            for(i1 in 1:length(DefaultSamplerList)){
+              if ((DefaultSamplerList[[i1]]$type == 'sampler_RW' | DefaultSamplerList[[i1]]$type == 'RW') & !is.null(DefaultSamplerList[[i1]]$control$log)){
+                if(DefaultSamplerList[[i1]]$control$log) 
+                  keepTrackTemp[i1,'sampler_RWlog']<<-1
+                else
+                  keepTrackTemp[i1,'sampler_RW']<<-1
+              } else if(regexpr('conjugate', DefaultSamplerList[[i1]]$type)>0){
+                
+                 keepTrackTemp[i1,'sampler_conjugate']<<-1
+              } else if(regexpr('slice', DefaultSamplerList[[i1]]$type)>0){
+                
+                 keepTrackTemp[i1,'sampler_slice']<<-1
+              } else if(regexpr('block', DefaultSamplerList[[i1]]$type)>0){
+                
+                 keepTrackTemp[i1,'sampler_RW_block']<<-1
+              } else
+              {  keepTrackTemp[i1,'sampler_RW']<<-1
+              }
+               
+            } 
+            
+                           
+             
                                      
-            confList <- list(createConfFromGroups(DefaultSamplerList))
+            for(i in 1 : 1){
+              print(keepTrackTemp)
+              confList <- list(createConfFromGroups(DefaultSamplerList))
               runConfListAndSaveBest(confList, paste0('auto',i), auto=TRUE)
-                                         
+              leastMixing <- names(LeastIndex[[it]])
+              print(leastMixing)
+              if(bestEfficiency < essPT[[it]][LeastIndex[[it]]]){
+                 bestEfficiency <- essPT[[it]][LeastIndex[[it]]]
+              }
+              index <- 1 
+              while(keepTrackTemp[LeastIndex[[it]],index]==1 | index>5){
+                index = index +1
+              }
+              if(index<6){
+                DefaultSamplerList[[LeastIndex[[it]]]]$type <- CandidateSamplerList[[index]]$type
+                keepTrackTemp[LeastIndex[[it]],index]<<-1
+              } else{
+                DefaultSamplerList[[LeastIndex[[it]]]]$type <- 'sampler_RW_block'
+                keepTrackTemp[LeastIndex[[it]],6]<<-1
+              }
+              GroupLM<-GroupOfLeastMixing(samples[[it]], leastMixing)
+              if(DefaultSamplerList[[LeastIndex[[it]]]]$type =='sampler_RW_block'  & length(DefaultSamplerList[[LeastIndex[[it]]]]$target)<2){
+                 
+                 
+                # if(length(GroupLM)>1){
+                #   print(GroupLM)
+                #   DefaultSamplerList[[LeastIndex[[it]]]]$target <- GroupLM
+                   
+                # } else { ## Just block anything to test
+                    print(c(names(essPT[[it]][LeastIndex[[it]]]),names(essPT[[it]][-LeastIndex[[it]]][1])))
+                    DefaultSamplerList[[LeastIndex[[it]]]]$target <- c(names(essPT[[it]][LeastIndex[[it]]]),names(essPT[[it]][-LeastIndex[[it]]][1])) 
+                # }  
+      
+                 
+               
+               }
+               
+               
+               
+               
+              
+            }  
+                                        
                                  
             names(candidateGroups) <<- naming
             names(grouping) <<- naming
@@ -1317,7 +1383,11 @@ determineCandidateGroupsFromCurrentSample = function() {
             means[[it]] <<- meansList[[bestInd]]
             sds[[it]] <<- sdsList[[bestInd]]
             ess[[it]] <<- essList[[bestInd]]
-            essPT[[it]] <<- sort(essPTList[[bestInd]])
+            essPT[[it]] <<- essPTList[[bestInd]]
+            LeastIndex[[it]] <<- which.min(essPT[[it]])
+            print(LeastIndex[[it]])
+           
+            
             if(TRUE) {
                 ## slight hack here, to remove samples of any deterministic nodes...
                 samplesTEMP <- as.matrix(CmcmcList[[bestInd]]$mvSamples)
