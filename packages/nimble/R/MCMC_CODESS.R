@@ -750,6 +750,7 @@ GroupOfLeastMixing <- function(Samples, leastMixing){
   for(i in seq_along(candidateGroupsList)){
     if(leastMixing %in% candidateGroupsList[[i]])
       return (candidateGroupsList[[i]])
+      
   }
 } 
 
@@ -1236,7 +1237,7 @@ autoCodessClass_oldClass <- setRefClass(
 	          rownames(keepTrackTemp) <<-names(DefaultSamplerList)
 	          
         },
-        run = function(candidateGroupsList) {
+        run = function(DefaultSamplerList) {
             abModel$createInitialMCMCconf()  ## here is where the initial MCMC conf is created, for re-use -- for new version
             
 	          oldConf = abModel$initialMCMCconf
@@ -1270,8 +1271,15 @@ autoCodessClass_oldClass <- setRefClass(
                            
              
                                      
-            for(i in 1 : 3){
+            for(i in 1 : 10){
               print(keepTrackTemp)
+              if(i>5){
+                for(j in 1:length(DefaultSamplerList))
+                if(regexpr('conjugate', DefaultSamplerList[[j]]$type)>0){
+                  DefaultSamplerList[[j]]$type='sampler_RW'
+                  DefaultSamplerList[[j]]$control = list()
+                }
+              }
               confList <- list(createConfFromGroups(DefaultSamplerList))
               runConfListAndSaveBest(confList, paste0('auto',i), auto=FALSE)
               leastMixing <- names(LeastIndex[[it]])
@@ -1280,24 +1288,27 @@ autoCodessClass_oldClass <- setRefClass(
                  bestEfficiency <- essPT[[it]][LeastIndex[[it]]]
               }
               index <- 1 
-              while(keepTrackTemp[LeastIndex[[it]],index]==1 | index>5){
-                index = index +1
-              }
+              if(keepTrackTemp[LeastIndex[[it]],index]==1){
+                while(keepTrackTemp[LeastIndex[[it]],index]==1 & index<6){
+                  index = index +1
+                }
+              } 
               if(index<6){
                 DefaultSamplerList[[LeastIndex[[it]]]]$type <- CandidateSamplerList[[index]]$type
                 keepTrackTemp[LeastIndex[[it]],index]<<-1
               } else{
                 DefaultSamplerList[[LeastIndex[[it]]]]$type <- 'sampler_RW_block'
                 keepTrackTemp[LeastIndex[[it]],6]<<-1
-                for(i in 1:6){
-                  keepTrackTemp[LeastIndex[[it]],i]<<-0
+                for(i1 in 1:6){
+                  keepTrackTemp[LeastIndex[[it]],i1]<<-0
                 }
               }
               if(DefaultSamplerList[[LeastIndex[[it]]]]$type =='sampler_RW_block'  & length(DefaultSamplerList[[LeastIndex[[it]]]]$target)<2){
-                 
-                GroupLM<-GroupOfLeastMixing(samples[[it]], leastMixing)
                
-                 if(length(GroupLM)>1){
+                  GroupLM<-try(GroupOfLeastMixing(samples[[it]], leastMixing))
+                 if (class(GroupLM) == 'try-error') {
+                   GroupLM <- leastMixing
+                 } else if(length(GroupLM)>1){
                    print(GroupLM)
                   DefaultSamplerList[[LeastIndex[[it]]]]$target <- GroupLM
                    
@@ -1328,11 +1339,11 @@ autoCodessClass_oldClass <- setRefClass(
                 
                                         
                                  
-            names(candidateGroups) <<- naming
-            names(grouping) <<- naming
-            names(groupSizes) <<- naming
-            names(groupIDs) <<- naming
-            names(samplers) <<- naming
+            #names(candidateGroups) <<- naming
+            #names(grouping) <<- naming
+            #names(groupSizes) <<- naming
+            #names(groupIDs) <<- naming
+            #names(samplers) <<- naming
             names(Cmcmcs) <<- naming
             names(timing) <<- naming
             if(saveSamples) names(samples) <<- naming
@@ -1380,17 +1391,17 @@ determineCandidateGroupsFromCurrentSample = function() {
                 essList[[i]]   <- apply(samplesList[[i]], 2, effectiveSize)
                 if(!saveSamples) samplesList[[i]] <- NA
                 essPTList[[i]] <- essList[[i]] / timingList[[i]]
-                essPTminList[[i]] <- sort(essPTList[[i]])[1]
+                essPTminList[[i]] <- which.min(essPTList[[i]])
             }
             bestInd <- as.numeric(which(unlist(essPTminList) == max(unlist(essPTminList))))
             if(!is.null(names(confList))) name <- paste0(name, '-', names(confList)[bestInd])
             it <<- it + 1
             naming[[it]] <<- name
-            candidateGroups[[it]] <<- lapply(confList, function(conf) determineGroupsFromConf(conf))
-            grouping[[it]] <<- candidateGroups[[it]][[bestInd]]
-            groupSizes[[it]] <<- determineNodeGroupSizesFromGroups(grouping[[it]])
-            groupIDs[[it]] <<- determineNodeGroupIDsFromGroups(grouping[[it]])
-            samplers[[it]] <<- determineSamplersFromGroupsAndConf(grouping[[it]], confList[[bestInd]])
+            #candidateGroups[[it]] <<- lapply(confList, function(conf) determineGroupsFromConf(conf))
+            #grouping[[it]] <<- candidateGroups[[it]][[bestInd]]
+            #groupSizes[[it]] <<- determineNodeGroupSizesFromGroups(grouping[[it]])
+            #groupIDs[[it]] <<- determineNodeGroupIDsFromGroups(grouping[[it]])
+            #samplers[[it]] <<- determineSamplersFromGroupsAndConf(grouping[[it]], confList[[bestInd]])
             Cmcmcs[[it]] <<- CmcmcList[[bestInd]]
             timing[[it]] <<- timingList[[bestInd]]
             samples[[it]] <<- samplesList[[bestInd]]
@@ -1400,7 +1411,9 @@ determineCandidateGroupsFromCurrentSample = function() {
             essPT[[it]] <<- essPTList[[bestInd]]
             LeastIndex[[it]] <<- which.min(essPT[[it]])
             print(LeastIndex[[it]])
-           
+            if(it>1)
+              samples[[it-1]] <<- NA
+            
             
             if(auto) {
                 ## slight hack here, to remove samples of any deterministic nodes...
@@ -1457,7 +1470,7 @@ determineCandidateGroupsFromCurrentSample = function() {
             n = length(groups)
             for (i in 1:n){
               if(regexpr('conjugate', groups[[i]]$type)>0){
-                if(i<0){
+                if(i>4){
                   conf$addSampler(target = groups[[i]]$target,type = 'sampler_conjugate', control=list())
                 } else {
                   conf$addSampler(target = groups[[i]]$target,type = 'sampler_RW')
@@ -1494,9 +1507,9 @@ determineCandidateGroupsFromCurrentSample = function() {
         },
         printCurrent = function(name, conf) {
             cat(paste0('\n################################\nbegin iteration ', it, ': ', name, '\n################################\n'))
-            if(length(candidateGroups[[it]]) > 1) { cat('\ncandidate groups:\n'); cg<-candidateGroups[[it]]; for(i in seq_along(cg)) { cat(paste0('\n',names(cg)[i],':\n')); printGrouping(cg[[i]]) } }
-            cat('\ngroups:\n'); printGrouping(grouping[[it]])
-            cat('\nsamplers:\n'); conf$getSamplers()
+            #if(length(candidateGroups[[it]]) > 1) { cat('\ncandidate groups:\n'); cg<-candidateGroups[[it]]; for(i in seq_along(cg)) { cat(paste0('\n',names(cg)[i],':\n')); printGrouping(cg[[i]]) } }
+            #cat('\ngroups:\n'); printGrouping(grouping[[it]])
+            #cat('\nsamplers:\n'); conf$getSamplers()
             cat(paste0('\nMCMC runtime: ', round(timing[[it]], 1), ' seconds\n'))
             cat('\nESS:\n'); print(round(ess[[it]], 0))
             cat('\nESS/time:\n'); print(round(essPT[[it]], 1))
