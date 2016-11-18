@@ -1173,11 +1173,12 @@ autoCodessModel_oldClass <- setRefClass(
             initialMCMCconf$addSampler(type = 'sampler_AF_slice', target = latentNodeVector[1:2], control = list(sliceWidths = c(.5,.5), sliceFactorBurnInIters = 500,sliceFactorAdaptInterval = 50, sliceSliceAdaptIters = 50), print=FALSE)  ## add one RW_block sampler
             
             #addCustomizedSamplersToInitialMCMCconf()
-            initialMCMCconf$addMonitors(monitorsVector, print=FALSE)
+            initialMCMCconf$addMonitors(monitorsVector, print=TRUE)
             RinitialMCMC <- buildMCMC(initialMCMCconf)
             Cmodel <<- compileNimble(Rmodel)
             CinitialMCMC <- compileNimble(RinitialMCMC, project = Rmodel)   ## (new version) yes, we need this compileNimble call -- this is the whole point!
             initialMCMCconf$setSamplers(1:nInitialSamplers, print=FALSE)  ## important for new version: removes all news samplers added to initial MCMC conf
+            #initialMCMCconf$addMonitors(monitorsVector, print=TRUE)
         },
         addCustomizedSamplersToInitialMCMCconf = function(runListCode) {
             if(is.list(runListCode)) { lapply(runListCode, function(el) addCustomizedSamplersToInitialMCMCconf(el)); return() }
@@ -1227,6 +1228,7 @@ autoCodessClass_oldClass <- setRefClass(
         ## special
         abModel = 'ANY',
         it = 'numeric',
+        monitor = 'character',
         ## overall control
         cutree_heights = 'numeric',
         allIndex = 'numeric',
@@ -1260,7 +1262,7 @@ autoCodessClass_oldClass <- setRefClass(
         keepTrackTemp = 'matrix'
         ),
     methods = list(
-        initialize = function(code, constants=list(), data=list(), inits=list(), control=list(),DefaultSamplerList=list(), CandidateSamplerList=list()) {
+        initialize = function(code, constants=list(), data=list(), inits=list(), control=list(),DefaultSamplerList=list(), CandidateSamplerList=list(), monitor= character()) {
             library(lattice)
             library(coda)
             library(nimble)
@@ -1276,14 +1278,14 @@ autoCodessClass_oldClass <- setRefClass(
 	           
 	          
         },
-        run = function(DefaultSamplerList) {
+        run = function(DefaultSamplerList, monitor) {
             abModel$createInitialMCMCconf()  ## here is where the initial MCMC conf is created, for re-use -- for new version
             
 	          oldConf = abModel$initialMCMCconf
 	          n = length(DefaultSamplerList)
 	          Indices <- 1:allIndex 
 	          NodeInfo <<- vector(mode="list", length=n)
-	          
+	          monitor <<-monitor
 	          for(i1 in 1: n){
               names(NodeInfo)[i1] <<- names(DefaultSamplerList)[i1]
               NodeInfo[[i1]]$type <<- DefaultSamplerList[[i1]]$type
@@ -1340,7 +1342,7 @@ autoCodessClass_oldClass <- setRefClass(
                                      
             for(i in 1 : 5){
               
-              confList <- list(createConfFromGroups(DefaultSamplerList))
+              confList <- list(createConfFromGroups(DefaultSamplerList, monitor))
               print("Config List:")
               confList[[1]]$printSamplers()
               runConfListAndSaveBest(confList, paste0('auto',i), auto=FALSE)
@@ -1451,7 +1453,7 @@ determineCandidateGroupsFromCurrentSample = function() {
                 print("Node names")
                 print(abModel$Rmodel$getNodeNames(determOnly=TRUE, returnScalarComponents=TRUE))
                 
-                namesToKeep <- setdiff(dimnames(samplesTEMP)[[2]], abModel$Rmodel$getNodeNames(determOnly=TRUE, returnScalarComponents=TRUE))
+                namesToKeep <- monitor
                 
                 print("name of sample TEMP")
                 print(namesToKeep)
@@ -1535,7 +1537,7 @@ determineCandidateGroupsFromCurrentSample = function() {
             for(i in seq_along(groups)) for(node in groups[[i]]) samplerVector[[node]] <- samplerConfs[[i]]$name
             return(samplerVector)
         },
-        createConfFromGroups = function(groups) {
+        createConfFromGroups = function(groups, monitor) {
             ##conf <- configureMCMC(Rmodel, nodes=NULL, monitors=character(0)) ## original version
             conf <- configureMCMC(oldConf = abModel$initialMCMCconf)  ## new version
             conf$setSamplers()  ## new version -- removes all the samplers from initalMCMCconf
@@ -1558,7 +1560,7 @@ determineCandidateGroupsFromCurrentSample = function() {
                 conf$addSampler(target = groups[[i]]$target, type = groups[[i]]$type , control = groups[[i]]$control)
               }
             }
-            #conf$addMonitors(abModel$monitorsVector)
+            #conf$addMonitors(monitor)
             
             return(conf)
         },
