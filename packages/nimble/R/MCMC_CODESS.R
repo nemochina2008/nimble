@@ -182,6 +182,42 @@ MCMC_CODESS <- function(
   return(CODESS$output)
 }
 
+
+effectiveSizeHO <- function (x, order.max = 2000) {
+    if (is.mcmc.list(x)) {
+        ess <- do.call("rbind", lapply(x, effectiveSize))
+        ans <- apply(ess, 2, sum)
+    }
+    else {
+        x <- as.mcmc(x)
+        x <- as.matrix(x)
+        spec <- spectrum0.ar.big(x, order.max = order.max)$spec
+        ans <- ifelse(spec == 0, 0, nrow(x) * apply(x, 2, var)/spec)
+    }
+    return(ans)
+}
+
+spectrum0.ar.big <- function (x, order.max = 2000) {
+    x <- as.matrix(x)
+    v0 <- order <- numeric(ncol(x))
+    names(v0) <- names(order) <- colnames(x)
+    z <- 1:nrow(x)
+    for (i in 1:ncol(x)) {
+        lm.out <- lm(x[, i] ~ z)
+        if (identical(all.equal(sd(residuals(lm.out)), 0), TRUE)) {
+            v0[i] <- 0
+            order[i] <- 0
+        }
+        else {
+            ar.out <- ar(x[, i], aic = TRUE, order.max = order.max)
+            v0[i] <- ar.out$var.pred/(1 - sum(ar.out$ar))^2
+            order[i] <- ar.out$order
+        }
+    }
+    return(list(spec = v0, order = order))
+}
+
+
 codess<-function(x, tuning){
   Nchain = round(length(x)/2)
   N <- tuning$gridsize
@@ -737,12 +773,11 @@ BuildCombinedConf <- function(DefaultSamplerList, CandidateSamplerList, targetNa
 
 
 
-GroupOfLeastMixing <- function(Samples, leastMixing){
+GroupOfLeastMixing <- function(Samples, leastMixing, h){
   empCov <- cov(Samples)
   empCor <<- cov2cor(empCov)
   distMatrix <- as.dist(1 - abs(empCor))
   hTree <- hclust(distMatrix, method = 'complete')
-  h=mean(hTree$height)
   cutreeList <- cutree(hTree, h=h)
   uniqueCutreeList <- unique(cutreeList)
   candidateGroupsList <- lapply(uniqueCutreeList, function(ct) {
@@ -868,7 +903,7 @@ ImproveMixing1 <- function(code, constants, data, inits, niter, burnin, tuning, 
     
       leastIndex = which(monitor==leastMixing)
       ### Cluster the least mixing variable using distance matrix
-      GroupLM<-GroupOfLeastMixing(Samples, leastMixing)
+      GroupLM<-GroupOfLeastMixing(Samples, leastMixing, h=0.5)
       #### Choose the target as the least mixing variable, generate a list of cadidate samplers.
       targetNames= list(monitor[leastIndex])
       print("Block includes:")
@@ -1004,7 +1039,7 @@ conf <- configureMCMC(oldConf = initialMCMCconf)  ## new version
     
       leastIndex = which(monitor==leastMixing)
       ### Cluster the least mixing variable using distance matrix
-      GroupLM<-GroupOfLeastMixing(Samples, leastMixing)
+      GroupLM<-GroupOfLeastMixing(Samples, leastMixing, h=0.5)
       #### Choose the target as the least mixing variable, generate a list of cadidate samplers.
       targetNames= list(monitor[leastIndex])
       print("Block includes:")
@@ -1194,13 +1229,15 @@ autoCodessClass_oldClass <- setRefClass(
         it = 'numeric',
         ## overall control
         cutree_heights = 'numeric',
+        allIndex = 'numeric',
         makePlots = 'logical',
         niter = 'numeric',
         saveSamples = 'logical',
         setSeed0 = 'logical',
         verbose = 'logical',
         ## persistant lists of historical data
-        keepTrack = 'list',
+        NodeInfo = 'list',
+        BestSamplers = 'list',
         naming = 'list',
         candidateGroups = 'list',
         grouping = 'list',
@@ -1232,80 +1269,105 @@ autoCodessClass_oldClass <- setRefClass(
             for(i in seq_along(defaultsList)) if(is.null(control[[names(defaultsList)[i]]])) control[[names(defaultsList)[i]]] <- defaultsList[[i]]
             for(i in seq_along(control)) eval(substitute(verbose <<- VALUE, list(verbose=as.name(names(control)[i]), VALUE=control[[i]])))
             it <<- 0
+            allIndex <<- length(CandidateSamplerList)
             keepTrackTemp <<-matrix(0, ncol=length(CandidateSamplerList)+1, nrow= length(DefaultSamplerList))
 	          colnames(keepTrackTemp) <<-c(names(CandidateSamplerList),'Include')
 	          rownames(keepTrackTemp) <<-names(DefaultSamplerList)
+	           
 	          
         },
         run = function(DefaultSamplerList) {
             abModel$createInitialMCMCconf()  ## here is where the initial MCMC conf is created, for re-use -- for new version
             
 	          oldConf = abModel$initialMCMCconf
-	    
-	    
-	          bestEfficiency = c(a=0)
-            count =0
-            bestIndex=0
-	          autoIt <- 1
-            for(i1 in 1:length(DefaultSamplerList)){
+	          n = length(DefaultSamplerList)
+	          Indices <- 1:allIndex 
+	          NodeInfo <<- vector(mode="list", length=n)
+	          
+	          for(i1 in 1: n){
+              names(NodeInfo)[i1] <<- names(DefaultSamplerList)[i1]
+              NodeInfo[[i1]]$type <<- DefaultSamplerList[[i1]]$type
+              NodeInfo[[i1]]$target <<- DefaultSamplerList[[i1]]$target
+              NodeInfo[[i1]]$currentIndices <<- c() 
+              NodeInfo[[i1]]$Nodes <<- unique(c(NodeInfo[[i1]]$Nodes, NodeInfo[[i1]]$target))    
+              #random walk log scale
               if ((DefaultSamplerList[[i1]]$type == 'sampler_RW' | DefaultSamplerList[[i1]]$type == 'RW') & !is.null(DefaultSamplerList[[i1]]$control$log)){
-                if(DefaultSamplerList[[i1]]$control$log) 
-                  keepTrackTemp[i1,'sampler_RWlog']<<-1
-                else
-                  keepTrackTemp[i1,'sampler_RW']<<-1
-              } else if(regexpr('conjugate', DefaultSamplerList[[i1]]$type)>0){
+                if(DefaultSamplerList[[i1]]$control$log){ 
+                  NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, 3))
+                  NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW_log"))
+                  
+                  
+                } else {
+                  NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, 2))
+                  NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW"))
+                  
+                  
+                }
+              } else if(regexpr('conjugate', NodeInfo[[i1]]$type)>0){
                 
-                 keepTrackTemp[i1,'sampler_conjugate']<<-1
-              } else if(regexpr('slice', DefaultSamplerList[[i1]]$type)>0){
+                 NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, 1))
+                 NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "conjugate"))
+                  
+              } else if(regexpr('slice', NodeInfo[[i1]]$type)>0){
                 
-                 keepTrackTemp[i1,'sampler_slice']<<-1
-              } else if(regexpr('block', DefaultSamplerList[[i1]]$type)>0){
+                 NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, 4))
+                 NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "slice"))
+                  
+              } else if(regexpr('block', NodeInfo[[i1]]$type)>0){
                 
-                 keepTrackTemp[i1,'sampler_RW_block']<<-1
-              } else
-              {  keepTrackTemp[i1,'sampler_RW']<<-1
+                 NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, 5))
+                 NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW_block"))
+                  
+              } else {  
+                 NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, 2))
+                 NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW"))
+                  
               }
                
             } 
             
-                           
+            BestSamplers <<- DefaultSamplerList
+              
+           
+
+	          bestEfficiency = c(a=0)
+            count =0
+            bestIndex=0
+            index <-2
+	          autoIt <- 1
+                                    
              
                                      
-            for(i in 1 : 10){
-              print(keepTrackTemp)
-              if(i>5){
-                for(j in 1:length(DefaultSamplerList))
-                if(regexpr('conjugate', DefaultSamplerList[[j]]$type)>0){
-                  DefaultSamplerList[[j]]$type='sampler_RW'
-                  DefaultSamplerList[[j]]$control = list()
-                }
-              }
+            for(i in 1 : 5){
+              
               confList <- list(createConfFromGroups(DefaultSamplerList))
+              print("Config List:")
+              confList[[1]]$printSamplers()
               runConfListAndSaveBest(confList, paste0('auto',i), auto=FALSE)
               leastMixing <- names(LeastIndex[[it]])
               print(leastMixing)
               if(bestEfficiency < essPT[[it]][LeastIndex[[it]]]){
                  bestEfficiency <- essPT[[it]][LeastIndex[[it]]]
+                 BestSamplers <<- DefaultSamplerList
+            
               }
-              index <- 1 
-              if(keepTrackTemp[LeastIndex[[it]],index]==1){
-                while(keepTrackTemp[LeastIndex[[it]],index]==1 & index<6){
-                  index = index +1
-                }
-              } 
-              if(index<6){
-                DefaultSamplerList[[LeastIndex[[it]]]]$type <- CandidateSamplerList[[index]]$type
-                keepTrackTemp[LeastIndex[[it]],index]<<-1
-              } else{
-                DefaultSamplerList[[LeastIndex[[it]]]]$type <- 'sampler_RW_block'
-                keepTrackTemp[LeastIndex[[it]],6]<<-1
-                for(i1 in 1:6){
-                  keepTrackTemp[LeastIndex[[it]],i1]<<-0
-                }
+              
+              avail <- NodeInfo[[LeastIndex[[it]]]]$currentIndices
+              
+              if(length(Indices[-avail]>0)){
+                index <- sample(Indices[-avail])[1] 
+              } else {
+                NodeInfo[LeastIndex[[it]]]$currentIndices <<- c()
+                index <- sample(Indices)[1]
               }
+              DefaultSamplerList[[LeastIndex[[it]]]]$type <- CandidateSamplerList[[index]]$type
+              NodeInfo[[LeastIndex[[it]]]]$currentIndices <<- unique(c(NodeInfo[[LeastIndex[[it]]]]$currentIndices, index))
+              
+              
               if(DefaultSamplerList[[LeastIndex[[it]]]]$type =='sampler_RW_block'  & length(DefaultSamplerList[[LeastIndex[[it]]]]$target)<2){
-               
-                  GroupLM<-try(GroupOfLeastMixing(samples[[it]], leastMixing))
+                  
+                  h = sample(seq(0.5,0.9, by=0.1))[1]
+                  GroupLM<-try(GroupOfLeastMixing(samples[[it]], leastMixing, h= h))
                  if (class(GroupLM) == 'try-error') {
                    GroupLM <- leastMixing
                  } else if(length(GroupLM)>1){
@@ -1326,10 +1388,10 @@ autoCodessClass_oldClass <- setRefClass(
                }
                print("Now, the sampler of the least mixing is:")
                print(DefaultSamplerList[[LeastIndex[[it]]]]$type)
+               print(DefaultSamplerList[[LeastIndex[[it]]]]$target)
                print("Efficiency is:")
                print(bestEfficiency)
-               
-               
+                              
                
                
               
@@ -1383,13 +1445,24 @@ determineCandidateGroupsFromCurrentSample = function() {
                 timingList[[i]] <- as.numeric(system.time(CmcmcList[[i]]$run(niter))[3])
                 ## slight hack here, to remove samples of any deterministic nodes...
                 samplesTEMP <- as.matrix(CmcmcList[[i]]$mvSamples)
+                print("name of sample TEMP")
+                print(dimnames(samplesTEMP)[[2]])
+                
+                print("Node names")
+                print(abModel$Rmodel$getNodeNames(determOnly=TRUE, returnScalarComponents=TRUE))
+                
                 namesToKeep <- setdiff(dimnames(samplesTEMP)[[2]], abModel$Rmodel$getNodeNames(determOnly=TRUE, returnScalarComponents=TRUE))
+                
+                print("name of sample TEMP")
+                print(namesToKeep)
+                
                 samplesList[[i]] <- samplesTEMP[, namesToKeep]
                 ## end of slight hack...
                 meansList[[i]] <- apply(samplesList[[i]], 2, mean)
                 sdsList[[i]]   <- apply(samplesList[[i]], 2, sd)
                 essList[[i]]   <- apply(samplesList[[i]], 2, effectiveSize)
-                if(!saveSamples) samplesList[[i]] <- NA
+                
+                plot(samplesList[[i]][,'sigPN'])
                 essPTList[[i]] <- essList[[i]] / timingList[[i]]
                 essPTminList[[i]] <- which.min(essPTList[[i]])
             }
@@ -1477,13 +1550,15 @@ determineCandidateGroupsFromCurrentSample = function() {
                 }
       
               } else if(length(groups[[i]]$target)>1 ){
-      
-                conf$addSampler(target = groups[[i]]$target, type = 'sampler_AF_slice', control = list(sliceWidths = rep(.5, length(groups[[i]]$target) ), sliceFactorBurnInIters = 50,sliceFactorAdaptInterval = 50, sliceSliceAdaptIters = 50))
+                
+                if(runif(1)<0.5)
+                conf$addSampler(target = groups[[i]]$target, type = 'sampler_RW_block',control =  (list(adaptive = TRUE, adaptInterval = 20)))
+                else conf$addSampler(target = groups[[i]]$target, type = 'sampler_AF_slice', control = list(sliceWidths = rep(.5, length(groups[[i]]$target) ), sliceFactorBurnInIters = 50,sliceFactorAdaptInterval = 500, sliceSliceAdaptIters = 50))
               } else{
                 conf$addSampler(target = groups[[i]]$target, type = groups[[i]]$type , control = groups[[i]]$control)
               }
             }
-            
+            #conf$addMonitors(abModel$monitorsVector)
             
             return(conf)
         },
