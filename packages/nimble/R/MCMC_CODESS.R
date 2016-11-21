@@ -1340,7 +1340,7 @@ autoCodessClass_oldClass <- setRefClass(
                                     
              
                                      
-            for(i in 1 : 5){
+            for(i in 1 : 20){
               
               confList <- list(createConfFromGroups(DefaultSamplerList, monitor))
               print("Config List:")
@@ -1447,24 +1447,16 @@ determineCandidateGroupsFromCurrentSample = function() {
                 timingList[[i]] <- as.numeric(system.time(CmcmcList[[i]]$run(niter))[3])
                 ## slight hack here, to remove samples of any deterministic nodes...
                 samplesTEMP <- as.matrix(CmcmcList[[i]]$mvSamples)
-                print("name of sample TEMP")
-                print(dimnames(samplesTEMP)[[2]])
-                
-                print("Node names")
-                print(abModel$Rmodel$getNodeNames(determOnly=TRUE, returnScalarComponents=TRUE))
-                
+                 
                 namesToKeep <- monitor
-                
-                print("name of sample TEMP")
-                print(namesToKeep)
-                
+                                
                 samplesList[[i]] <- samplesTEMP[, namesToKeep]
                 ## end of slight hack...
                 meansList[[i]] <- apply(samplesList[[i]], 2, mean)
                 sdsList[[i]]   <- apply(samplesList[[i]], 2, sd)
                 essList[[i]]   <- apply(samplesList[[i]], 2, effectiveSize)
                 
-                plot(samplesList[[i]][,'sigPN'])
+                plot(samplesList[[i]][,'sigOE'])
                 essPTList[[i]] <- essList[[i]] / timingList[[i]]
                 essPTminList[[i]] <- which.min(essPTList[[i]])
             }
@@ -1545,17 +1537,24 @@ determineCandidateGroupsFromCurrentSample = function() {
             n = length(groups)
             for (i in 1:n){
               if(regexpr('conjugate', groups[[i]]$type)>0){
-                if(i>4){
-                  conf$addSampler(target = groups[[i]]$target,type = 'sampler_conjugate', control=list())
+                if(it<=10){
+                  if(i>4){
+                    conf$addSampler(target = groups[[i]]$target,type = 'sampler_conjugate', control=list())
+                  } else {
+                    conf$addSampler(target = groups[[i]]$target,type = 'sampler_RW')
+                  }
                 } else {
-                  conf$addSampler(target = groups[[i]]$target,type = 'sampler_RW')
+                    print("Try to change from conjugate sampler to random walk sampler")
+                    conf$addSampler(target = groups[[i]]$target,type = 'sampler_RW')
+                  
                 }
       
               } else if(length(groups[[i]]$target)>1 ){
                 
-                if(runif(1)<0.5)
-                conf$addSampler(target = groups[[i]]$target, type = 'sampler_RW_block',control =  (list(adaptive = TRUE, adaptInterval = 20)))
-                else conf$addSampler(target = groups[[i]]$target, type = 'sampler_AF_slice', control = list(sliceWidths = rep(.5, length(groups[[i]]$target) ), sliceFactorBurnInIters = 50,sliceFactorAdaptInterval = 500, sliceSliceAdaptIters = 50))
+               # if(runif(1)<0.5)
+               # conf$addSampler(target = groups[[i]]$target, type = 'sampler_RW_block',control =  (list(adaptive = TRUE, adaptInterval = 20)))
+              #  else 
+              conf$addSampler(target = groups[[i]]$target, type = 'sampler_AF_slice', control = list(sliceWidths = rep(.5, length(groups[[i]]$target) ), sliceFactorBurnInIters = 50,sliceFactorAdaptInterval = 50, sliceSliceAdaptIters = 50))
               } else{
                 conf$addSampler(target = groups[[i]]$target, type = groups[[i]]$type , control = groups[[i]]$control)
               }
