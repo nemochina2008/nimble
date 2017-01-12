@@ -47,6 +47,15 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                           setupSymbolTables = function(parentST = NULL) {
                                               argInfoWithMangledNames <- RCfun$argInfo
                                               numArgs <- length(argInfoWithMangledNames)
+                                              if(numArgs > 0) {
+                                                  argIsBlank <- unlist(lapply(RCfun$argInfo, identical, formals(function(a) {})[[1]]))
+                                                  ## it seems to be impossible to store the value of a blank argument, formals(function(a) {})[[1]], in a variable
+                                                  if(any(argIsBlank)) {
+                                                      stop(paste0("Type declaration missing for argument(s) ", paste(names(RCfun$argInfo)[argIsBlank], collapse = ", ")), call. = FALSE)
+                                                  }
+                                              }
+                                              argInfoWithMangledNames <- RCfun$argInfo
+                                              numArgs <- length(argInfoWithMangledNames)
                                               if(numArgs>0) names(argInfoWithMangledNames) <- paste0("ARG", 1:numArgs, "_", Rname2CppName(names(argInfoWithMangledNames)),"_")
                                               nameSubList <<- lapply(names(argInfoWithMangledNames), as.name)
                                               names(nameSubList) <<- names(RCfun$argInfo)
@@ -69,13 +78,14 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                       )
                                       )
 
-RCfunction <- function(f, name = NA, returnCallable = TRUE) {
+RCfunction <- function(f, name = NA, returnCallable = TRUE, check) {
     if(is.na(name)) name <- rcFunLabelMaker()
-    nfm <- nfMethodRC$new(f, name)
+    nfm <- nfMethodRC$new(f, name, check = check)
     if(returnCallable) nfm$generateFunctionObject(keep.nfMethodRC = TRUE) else nfm
 }
 
-is.rcf <- function(x) {
+is.rcf <- function(x, inputIsName = FALSE) {
+    if(inputIsName) x <- get(x)
     if(inherits(x, 'nfMethodRC')) return(TRUE)
     if(is.function(x)) {
         if(is.null(environment(x))) return(FALSE)
@@ -83,6 +93,8 @@ is.rcf <- function(x) {
     }
     FALSE
 }
+
+
 
 rcFunLabelMaker <- labelFunctionCreator('rcFun')
 
@@ -193,7 +205,8 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                        }
 
                                        compileInfo$typeEnv[['neededRCfuns']] <<- list()
-
+                                       compileInfo$typeEnv[['.AllowUnknowns']] <<- TRUE ## will be FALSE for RHS recursion in setSizes
+                                       compileInfo$typeEnv[['.ensureNimbleBlocks']] <<- FALSE ## will be TRUE for LHS recursion after RHS sees rmnorm and other vector dist "r" calls.
                                        passedArgNames <- as.list(compileInfo$origLocalSymTab$getSymbolNames()) 
                                        names(passedArgNames) <- compileInfo$origLocalSymTab$getSymbolNames() 
                                        compileInfo$typeEnv[['passedArgumentNames']] <<- passedArgNames ## only the names are used.  
@@ -206,9 +219,7 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                        
                                        if(debug) {
                                            print('compileInfo$nimExpr$show(showType = TRUE) -- broken')
-                                          ## print(compileInfo$nimExpr$show(showType = TRUE))
                                            print('compileInfo$nimExpr$show(showAssertions = TRUE) -- possible broken')
-                                           ## print(compileInfo$nimExpr$show(showAssertions = TRUE))
                                            writeLines('***** READY FOR insertAssertions *****')
                                            browser()
                                        }

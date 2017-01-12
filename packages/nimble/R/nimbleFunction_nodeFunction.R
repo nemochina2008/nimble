@@ -68,34 +68,36 @@ ndf_createMethodList <- function(LHS, RHS, altParams, logProbNodeExpr, type, set
         if(nimbleOptions()$compileAltParamFunctions) {
             distName <- as.character(RHS[[1]])
             ## add accessor function for node value; used in multivariate conjugate sampler functions
-            typeList <- getDistribution(distName)$types[['value']]
-            methodList[['get_value']] <- ndf_generateGetParamFunction(LHS, typeList$type, typeList$nDim)
+            type <- getType(distName)
+            nDim <- getDimension(distName)
+            methodList[['get_value']] <- ndf_generateGetParamFunction(LHS, type, nDim)
             ## add accessor functions for stochastic node distribution parameters
             for(param in names(RHS[-1])) {
                 if(!param %in% c("lower", "upper")) {
-                    typeList <- getDistribution(distName)$types[[param]]
-                    methodList[[paste0('get_',param)]] <- ndf_generateGetParamFunction(RHS[[param]], typeList$type, typeList$nDim)
+                    type <- getType(distName, param)
+                    nDim <- getDimension(distName, param)
+                    methodList[[paste0('get_',param)]] <- ndf_generateGetParamFunction(RHS[[param]], type, nDim)
                 }
             }
             for(i in seq_along(altParams)) {
                 altParamName <- names(altParams)[i]
-                typeList <- getDistribution(distName)$types[[altParamName]]
-                methodList[[paste0('get_',altParamName)]] <- ndf_generateGetParamFunction(altParams[[altParamName]], typeList$type, typeList$nDim)
+                type <- getType(distName, altParamName)
+                nDim <- getDimension(distName, altParamName)
+                methodList[[paste0('get_',altParamName)]] <- ndf_generateGetParamFunction(altParams[[altParamName]], type, nDim)
             }
             ## new for getParam, eventually to replace get_XXX where XXX is each param name
             ## TO-DO: unfold types and nDims more thoroughly (but all types are implemented as doubles anyway)
-            ## understand use of altParams vs. all entries in typesListAllParams
+            ## understand use of altParams vs. all entries in getDistributionInfo(distName)$types
             ## need a value Entry
             allParams <- c(list(value = LHS), as.list(RHS[-1]), altParams)
-            typesListAllParams <- getDistribution(distName)$types
-            ##numParams <- length(typesListAllParams)
-            typesNDims <- unlist(lapply(typesListAllParams, `[[`, 'nDim'))
-            typesTypes <- unlist(lapply(typesListAllParams, `[[`, 'type'))
-            paramIDs <- getDistribution(distName)$paramIDs
+            typesNDims <- getDimension(distName, includeParams = TRUE)
+            typesTypes <- getType(distName, includeParams = TRUE)
+            paramIDs <- getParamID(distName, includeParams = TRUE)
+
             ## rely on only double for now
             for(nDimSupported in c(0, 1, 2)) {
                 boolThisCase <- typesNDims == nDimSupported & typesTypes == 'double'
-                paramNamesToUse <- names(typesListAllParams)[boolThisCase]
+                paramNamesToUse <- getParamNames(distName)[boolThisCase]
                 caseName <- paste0("getParam_",nDimSupported,"D_double")
                 if(length(paramNamesToUse) > 0) 
                     methodList[[caseName]] <- ndf_generateGetParamSwitchFunction(allParams[paramNamesToUse], paramIDs[paramNamesToUse], type = 'double', nDim = nDimSupported) 
@@ -129,11 +131,11 @@ addArg <- function(code, value, name) {
 ## changes 'dnorm(mean=1, sd=2)' into 'rnorm(1, mean=1, sd=2)'
 ndf_createStochSimulate <- function(RHS) {
     BUGSdistName <- as.character(RHS[[1]])
-    RHS[[1]] <- as.name(getDistribution(BUGSdistName)$simulateName)   # does the appropriate substituion of the distribution name
+    RHS[[1]] <- as.name(getDistributionInfo(BUGSdistName)$simulateName)   # does the appropriate substituion of the distribution name
     if(length(RHS) > 1) {    for(i in (length(RHS)+1):3)   { RHS[i] <- RHS[i-1];     names(RHS)[i] <- names(RHS)[i-1] } }    # scoots all named arguments right 1 position
     RHS[[2]] <- 1;     names(RHS)[2] <- ''    # adds the first (unnamed) argument '1'
     if("lower" %in% names(RHS) || "upper" %in% names(RHS))
-        RHS <- ndf_createStochSimulateTrunc(RHS, discrete = getDistributionsInfo('discrete')[BUGSdistName])
+        RHS <- ndf_createStochSimulateTrunc(RHS, discrete = getAllDistributionsInfo('discrete')[BUGSdistName])
     return(RHS)
 }
 
@@ -147,7 +149,7 @@ ndf_createStochSimulateTrunc <- function(RHS, discrete = FALSE) {
     upper <- RHS[[upperPosn]]
     RHS <- RHS[-c(lowerPosn, upperPosn)]
     dist <- substring(as.character(RHS[[1]]), 2, 1000)
-    # userDist <- sum(BUGSdist %in% getDistributionsInfo('namesVector', userOnly = TRUE))
+    # userDist <- sum(BUGSdist %in% getAllDistributionsInfo('namesVector', userOnly = TRUE))
     # back to using periods in name because we now mangle the nf arg names
     lowerTailName <- 'lower.tail' # ifelse(userDist, 'lower_tail', 'lower.tail')
     logpName <- 'log.p'  # ifelse(userDist, 'log_p', 'log.p')
@@ -163,6 +165,7 @@ ndf_createStochSimulateTrunc <- function(RHS, discrete = FALSE) {
         ddistTemplate <- RHS
         ddistTemplate[[1]] <- as.name(paste0("d", dist))
         ddistTemplate <- addArg(ddistTemplate, 0, logName)
+        ceilTemplate <- quote(ceiling(x))
     } else ddistTemplate <- NULL
     
     # create bounds for runif() using pdist expressions
@@ -171,10 +174,13 @@ ndf_createStochSimulateTrunc <- function(RHS, discrete = FALSE) {
     VALUE_EXPR <- 0
     if(lower != -Inf) {
         pdistTemplate[[2]] <- lower
-        MIN_EXPR <- pdistTemplate
-        if(discrete)
-            ddistTemplate[[2]] <- lower
+        if(discrete) {
+            ceilTemplate[[2]] <- lower
+            ddistTemplate[[2]] <- ceilTemplate
+            pdistTemplate[[2]] <- ceilTemplate
+        }
         VALUE_EXPR <- ddistTemplate
+        MIN_EXPR <- pdistTemplate
     } 
     if(upper != Inf) {
         pdistTemplate[[2]] <- upper
@@ -204,13 +210,13 @@ ndf_createStochSimulateTrunc <- function(RHS, discrete = FALSE) {
 ## changes 'dnorm(mean=1, sd=2)' into 'dnorm(LHS, mean=1, sd=2, log=TRUE)'
 ndf_createStochCalculate <- function(logProbNodeExpr, LHS, RHS, diff = FALSE) {
     BUGSdistName <- as.character(RHS[[1]])
-    RHS[[1]] <- as.name(getDistribution(BUGSdistName)$densityName)   # does the appropriate substituion of the distribution name
+    RHS[[1]] <- as.name(getDistributionInfo(BUGSdistName)$densityName)   # does the appropriate substituion of the distribution name
     if(length(RHS) > 1) {    for(i in (length(RHS)+1):3)   { RHS[i] <- RHS[i-1];     names(RHS)[i] <- names(RHS)[i-1] } }    # scoots all named arguments right 1 position
     RHS[[2]] <- LHS;     names(RHS)[2] <- ''    # adds the first (unnamed) argument LHS
     if("lower" %in% names(RHS) || "upper" %in% names(RHS)) {
-        return(ndf_createStochCalculateTrunc(logProbNodeExpr, LHS, RHS, diff = diff, discrete = getDistributionsInfo('discrete')[BUGSdistName]))
+        return(ndf_createStochCalculateTrunc(logProbNodeExpr, LHS, RHS, diff = diff, discrete = getAllDistributionsInfo('discrete')[BUGSdistName]))
     } else {
-          userDist <- BUGSdistName %in% getDistributionsInfo('namesVector', userOnly = TRUE)
+          userDist <- BUGSdistName %in% getAllDistributionsInfo('namesVector', userOnly = TRUE)
           RHS <- addArg(RHS, 1, 'log')  # adds the last argument log=TRUE (log_value for user-defined) # This was changed to 1 from TRUE for easier C++ generation
           if(diff) {
               code <- substitute(LocalNewLogProb <- STOCHCALC,
@@ -233,7 +239,7 @@ ndf_createStochCalculateTrunc <- function(logProbNodeExpr, LHS, RHS, diff = FALS
     upper <- RHS[[upperPosn]]
     RHS <- RHS[-c(lowerPosn, upperPosn)]
     dist <- substring(as.character(RHS[[1]]), 2, 1000)
-    # userDist <- sum(as.character(RHS[[1]]) %in% getDistributionsInfo('namesVector', userOnly = TRUE))
+    # userDist <- sum(as.character(RHS[[1]]) %in% getAllDistributionsInfo('namesVector', userOnly = TRUE))
     # back to using periods in name because we now mangle the nf arg names
     lowerTailName <- 'lower.tail' # ifelse(userDist, 'lower_tail', 'lower.tail')
     logpName <- 'log.p' # ifelse(userDist, 'log_p', 'log.p')
@@ -248,6 +254,7 @@ ndf_createStochCalculateTrunc <- function(logProbNodeExpr, LHS, RHS, diff = FALS
         ddistTemplate <- RHS
         ddistTemplate[[1]] <- as.name(paste0("d", dist))
         ddistTemplate <- addArg(ddistTemplate, 0, logName)
+        ceilTemplate <- quote(ceiling(x))
     } else ddistTemplate <- NULL
     
     PDIST_LOWER <- 0
@@ -255,8 +262,11 @@ ndf_createStochCalculateTrunc <- function(logProbNodeExpr, LHS, RHS, diff = FALS
     DDIST_LOWER <- 0
     if(lower != -Inf) {
         pdistTemplate[[2]] <- lower
-        if(discrete)
-            ddistTemplate[[2]] <- lower
+        if(discrete) {
+            ceilTemplate[[2]] <- lower
+            ddistTemplate[[2]] <- ceilTemplate
+            pdistTemplate[[2]] <- ceilTemplate
+        }
         PDIST_LOWER <- pdistTemplate
         DDIST_LOWER <- ddistTemplate
     } 
@@ -282,7 +292,6 @@ ndf_createStochCalculateTrunc <- function(logProbNodeExpr, LHS, RHS, diff = FALS
                                LOWER = lower,
                                UPPER = upper,
                                VALUE = LHS,
-##                               LOGPROB = logProbNodeExpr,
                                DENSITY = RHS,
                                PDIST_LOWER = PDIST_LOWER,
                                PDIST_UPPER = PDIST_UPPER,
@@ -319,6 +328,9 @@ ndf_generateGetParamSwitchFunction <- function(typesListAll, paramIDs, type, nDi
     paramIDs <- as.integer(paramIDs)
     answerAssignmentExpressions <- lapply(typesListAll, function(x) substitute(PARAMANSWER_ <- ANSEXPR, list(ANSEXPR = x)))
     switchCode <- as.call(c(list(quote(nimSwitch), quote(PARAMID_), paramIDs), answerAssignmentExpressions))
+    # avoid arg name mismatch based on R partial arg name matching
+    names(answerAssignmentExpressions) <- NULL
+    names(switchCode)[2:3] <- c('paramID', 'IDoptions')
     if(nDim == 0) {
         answerInitCode <- quote(PARAMANSWER_ <- 0)  ## this avoids a Windows compiler warning about a possibly unassigned return variable
         ans <- try(eval(substitute(
@@ -378,28 +390,28 @@ ndf_createSingleMethod <- function(type, nDim) {
 ndf_createVirtualNodeFunctionDefinition <- function(types = list()) {
     methodsList <- lapply(types, function(singleType) ndf_createSingleMethod(type=singleType$type, nDim=singleType$nDim))
     if(length(methodsList) > 0)     names(methodsList) <- paste0('get_', names(methodsList))
-    virtualFuncionDef <- substitute(
+    virtualFunctionDef <- substitute(
         nimbleFunctionVirtual(
             contains = 'nodeFun',
             methods = METHODS
         ),
         list(METHODS = methodsList)
     )
-    return(virtualFuncionDef)
+    return(virtualFunctionDef)
 }
 
 ndf_createVirtualNodeFunctionDefinitionsList <- function(userAdded = FALSE) {
     defsList <- list()
     if(!userAdded) {
         defsList$node_determ <- ndf_createVirtualNodeFunctionDefinition()
-        for(distName in getDistributionsInfo('namesVector', nimbleOnly = TRUE)) {
-            defsList[[paste0('node_stoch_', distName)]] <- ndf_createVirtualNodeFunctionDefinition(getDistribution(distName)$types)
+        for(distName in getAllDistributionsInfo('namesVector', nimbleOnly = TRUE)) {
+            defsList[[paste0('node_stoch_', distName)]] <- ndf_createVirtualNodeFunctionDefinition(getDistributionInfo(distName)$types)
         }
     } else {
         # this deals with user-provided distributions
         if(exists('distributions', nimbleUserNamespace)) {
-            for(distName in getDistributionsInfo('namesVector', userOnly = TRUE))
-                defsList[[paste0('node_stoch_', distName)]] <- ndf_createVirtualNodeFunctionDefinition(getDistribution(distName)$types)
+            for(distName in getAllDistributionsInfo('namesVector', userOnly = TRUE))
+                defsList[[paste0('node_stoch_', distName)]] <- ndf_createVirtualNodeFunctionDefinition(getDistributionInfo(distName)$types)
         } else stop("ndf_createVirtualNodeFunctionDefinitionsList: no 'distributions' list in nimbleUserNamespace.")
     }
     return(defsList)

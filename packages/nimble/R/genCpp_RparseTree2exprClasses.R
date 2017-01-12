@@ -49,7 +49,9 @@ RparseTree2ExprClasses <- function(code, caller = NULL, callerArgID = numeric())
                 for(iSwitch in 4:length(code))
                     if(!isRbracket(code[[iSwitch]])) code[[iSwitch]] <- embedInRbracket(code[[iSwitch]])
         }
-        
+        if(name == 'run.time') {
+            if(!isRbracket(code[[2]])) code[[2]] <- embedInRbracket(code[[2]])
+        }
         if(name == 'map') { ## special treatment. just stick the remaining arguments in as a list
             ans$args <- as.list(code[-1])
             return(ans)
@@ -57,6 +59,7 @@ RparseTree2ExprClasses <- function(code, caller = NULL, callerArgID = numeric())
         
         ## populate args with recursive calls
         if(length(code) > 1) {
+            if(!is.null(names(code))) names(ans$args) <- names(code)[-1] ## entries like "" on the RHS leave no name on LHS --> good.
             for(i in 2:length(code)) ## Note for NULL this removes the list entry.  Not very general, but handles return(invisible(NULL))
                 if(is.logical(code[[i]])) {
                     if(name == '[' & i == length(code))

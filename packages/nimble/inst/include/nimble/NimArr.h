@@ -3,6 +3,7 @@
 
 #include "NimArrBase.h"
 #include "Utils.h"
+#include <cstdlib>
 
 template<int ndim, class T>
   class NimArr;
@@ -16,11 +17,11 @@ public:
   int calculateIndex(vector<int> &i) const {return(calculateIndex(i[0]));};
   T &operator()(int i) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i)]);} // could add asserts here
 
-  ~NimArr<1, T>() {};
+  ~NimArr<1, T>() {//PRINTF("In NimArr<1, T> destructor\n");
+  };
 
   template<class Tother>
   NimArr<1, T> &mapCopy(const NimArr<1, Tother> &other) {
-    //   std::cout<<"In NimArr<1,T> mapCopy\n";
     if(size1 != other.size1) {
       PRINTF("Error in mapCopy.  Sizes don't match: %i != %i \n", size1, other.size1);
     }
@@ -34,16 +35,12 @@ public:
 	 to += NimArrBase<T>::stride1;
 	 from += otherStride;
     }
-    //    std::cout<<"Leaving NimArr<1,T> mapCopy\n";
     return(*this);
   }
 
   template<class Tother>
   NimArr<1, T> &templateCopyOperator(const NimArr<1, Tother> &other) { // This makes the copied-to object contiguous-memory.  Use mapCopy to copy into an existing map
-    //std::cout<<"Using operator= for a NimArr<1, T>\n";
-    //std::cout<<"types "<<NimArrBase<T>::getNimType()<<" "<<other.getNimType()<<"\n";
     if(NimArrBase<T>::isMap()) {
-      // std::cout<<"going to map copy\n";
      return(mapCopy(other));
     }
   
@@ -52,15 +49,13 @@ public:
     size1 = NimArrBase<T>::NAdims[0];
 
     NimArrBase<T>::NAlength = other.size();
-    //    NimArrBase<T>::myType = other.getNimType();
     NimArrBase<T>::setMyType();
 
     NimArrBase<T>::boolMap = false;
     NimArrBase<T>::offset = 0;
-    // vPtr, NAstrides, offset, stride1, boolMap
-    //   NimArrBase<T>::NAstrides.resize(1); 
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;   
     if(other.boolMap) {
+
       //      NimArrBase<T>::v.resize(size1);
       if(NimArrBase<T>::own_v) delete[] NimArrBase<T>::v;
       NimArrBase<T>::v = new T[size1];
@@ -88,12 +83,12 @@ public:
       //      NimArrBase<T>::v = other.v;
     }
     NimArrBase<T>::setVptr();
-    //    std::cout<<"Leaving operator= for a NimArr<1, T>\n";
     return(*this);
   }
 
   NimArr<1, T> &operator=(const NimArr<1, double> &other) {return(templateCopyOperator<double>(other));}
-  NimArr<1, T> &operator=(const NimArr<1, int> &other) {return(templateCopyOperator<int>(other));}  
+  NimArr<1, T> &operator=(const NimArr<1, int> &other) {return(templateCopyOperator<int>(other));}
+  NimArr<1, T> &operator=(const NimArr<1, bool> &other) {return(templateCopyOperator<bool>(other));}  
 
   NimArr<1, T> (const NimArr<1, T> &other) :
   NimArrBase<T>(other)
@@ -106,6 +101,7 @@ public:
     // vPtr, NAstrides, offset, stride1, boolMap
     //    NimArrBase<T>::NAstrides.resize(1);
     //NimArrBase<T>::NAstrides = new int[1]; 
+
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;   
      if(other.boolMap) {
        //NimArrBase<T>::v.resize(size1);
@@ -190,10 +186,15 @@ public:
     setSize(is1);
   }
 
-  void setSize(int is1) {
+  void initialize(T value, bool init, int is1) {
+    setSize(is1, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value); }
+  }
+
+  void setSize(int is1, bool copyValues = true, bool fillZeros = true) {
     NimArrBase<T>::NAdims[0] = size1 = is1;
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;
-    NimArrBase<T>::setLength(size1);
+    NimArrBase<T>::setLength(size1, copyValues, fillZeros);
   }
   virtual void setSize(vector<int> sizeVec) {setSize(sizeVec[0]);}
   virtual int numDims() const {return(1);}
@@ -218,13 +219,17 @@ public:
   int size1, size2, stride2;
   int calculateIndex(int i, int j) const {return(NimArrBase<T>::offset + NimArrBase<T>::stride1 * i + stride2 * j);} // j * s1 + i);}
   int calculateIndex(vector<int> &i) const {return(calculateIndex(i[0], i[1]));};
-    T &operator()(int i, int j) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j)]);} // could add asserts here
-
+  T &operator()(int i, int j) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j)]);} // could add asserts here
+  
+  T &operator[](int i) const {
+    std::div_t divRes = std::div(i, size1);
+    return((*NimArrBase<T>::vPtr)[calculateIndex(divRes.rem, floor(divRes.quot))]);
+  }
+    
   ~NimArr<2, T>() {};
 
   template<class Tother>
   NimArr<2, T> &mapCopy(const NimArr<2, Tother> &other) {
-    // std::cout<<"In NimArr<2, T> mapCopy\n";
     if(size1 != other.size1) {
       PRINTF("Error in mapCopy.  Sizes 1 don't match: %i != %i \n", size1, other.size1);
     }
@@ -248,13 +253,10 @@ public:
       from += (-size1 * otherStride1) + otherStride2;
       to += (-size1 * NimArrBase<T>::stride1) + stride2;
     }
-    // std::cout<<"Leaving NimArr<2, T> mapCopy\n";
     return(*this);
   }
 
   NimArr<2, T> &operator=(const NimArr<2, T> &other) {
-    // std::cout<<"Using operator= for a NimArr<2, T>\n";
-
     if(NimArrBase<T>::isMap()) {
       return(mapCopy(other));
     }
@@ -270,8 +272,6 @@ public:
     NimArrBase<T>::boolMap = false;
     NimArrBase<T>::offset = 0;
    
-    // vPtr, NAstrides, offset, stride1, boolMap
-    //    NimArrBase<T>::NAstrides.resize(2); 
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;   
     NimArrBase<T>::NAstrides[1] = stride2 = size1;   
     if(other.boolMap) {
@@ -303,7 +303,6 @@ public:
       std::copy(other.v, other.v + NimArrBase<T>::NAlength, NimArrBase<T>::v);
     }
     NimArrBase<T>::setVptr();
-    // std::cout<<"Leaving operator= for a NimArr<2, T>\n";
     return(*this);
   }
 
@@ -314,6 +313,7 @@ public:
     //NimArrBase<T>::NAdims = new int[2];
     std::memcpy(NimArrBase<T>::NAdims, other.dim(), 2 * sizeof(int));
     // std::cout<<"Using copy constructor for a NimArr<2, T>\n";
+
     size1 = NimArrBase<T>::NAdims[0];
     size2 = NimArrBase<T>::NAdims[1];
 
@@ -416,10 +416,15 @@ public:
     setSize(is1, is2);
   }
 
-    void setSize(int is1, int is2) {
+  void initialize(T value, bool init, int is1, int is2) {
+    setSize(is1, is2, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value); }
+  }
+
+  void setSize(int is1, int is2, bool copyValues = true, bool fillZeros = true) {
       NimArrBase<T>::NAdims[0] = size1 = is1; 
       NimArrBase<T>::NAdims[1] = size2 = is2;
-      NimArrBase<T>::setLength(size1 * size2);
+      NimArrBase<T>::setLength(size1 * size2, copyValues, fillZeros);
       NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;
       NimArrBase<T>::NAstrides[1] = stride2 = is1;
     }
@@ -450,11 +455,16 @@ class NimArr<3, T> : public NimArrBase<T> {
   int calculateIndex(vector<int> &i) const {return(calculateIndex(i[0], i[1], i[2]));};
   T &operator()(int i, int j, int k) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j, k)]);} // could add asserts here
 
+  T &operator[](int i) const {
+    std::div_t divRes1 = std::div(i, size1);
+    std::div_t divRes2 = std::div(floor(divRes1.quot), size2);
+    return((*NimArrBase<T>::vPtr)[calculateIndex(divRes1.rem, divRes2.rem, floor(divRes2.quot))]);
+  }
+
   ~NimArr<3, T>() {};
 
   template<class Tother>
   NimArr<3, T> &mapCopy(const NimArr<3, Tother> &other) {
-    // std::cout<<"In NimArr<3, T> mapCopy\n";
     if(size1 != other.size1) {
       PRINTF("Error in mapCopy.  Sizes 1 don't match: %i != %i \n", size1, other.size1);
     }
@@ -486,13 +496,10 @@ class NimArr<3, T> : public NimArrBase<T> {
       from += (-size2 * otherStride2) + otherStride3;
       to += (-size2 * stride2 + stride3);
     }
-    // std::cout<<"Leaving NimArr<3, T> mapCopy\n";
     return(*this);
   }
 
   NimArr<3, T> &operator=(const NimArr<3, T> &other) {
-    // std::cout<<"Using operator= for a NimArr<3, T>\n";
-
     if(NimArrBase<T>::isMap()) {
       return(mapCopy(other));
     }
@@ -510,8 +517,6 @@ class NimArr<3, T> : public NimArrBase<T> {
     NimArrBase<T>::boolMap = false;
     NimArrBase<T>::offset = 0;
    
-    // vPtr, NAstrides, offset, stride1, boolMap
-    //    NimArrBase<T>::NAstrides.resize(2); 
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;   
     NimArrBase<T>::NAstrides[1] = stride2 = size1;   
     NimArrBase<T>::NAstrides[2] = stride3 = size1 * size2;   
@@ -547,13 +552,13 @@ class NimArr<3, T> : public NimArrBase<T> {
       std::copy(other.v, other.v + NimArrBase<T>::NAlength, NimArrBase<T>::v);
     }
     NimArrBase<T>::setVptr();
-    // std::cout<<"Leaving operator= for a NimArr<3, T>\n";
     return(*this);
   }
 
   NimArr<3, T> (const NimArr<3, T> &other) :
   NimArrBase<T>(other)
   {
+
     //    NimArrBase<T>::NAdims = other.dim();
     //NimArrBase<T>::NAdims = new int[3];
     std::memcpy(NimArrBase<T>::NAdims, other.dim(), 3 * sizeof(int));
@@ -676,14 +681,19 @@ class NimArr<3, T> : public NimArrBase<T> {
     setSize(is1, is2, is3);
   }
 
-  void setSize(int is1, int is2, int is3) {
+  void initialize(T value, bool init, int is1, int is2, int is3) {
+    setSize(is1, is2, is3, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value); }
+  }
+
+  void setSize(int is1, int is2, int is3, bool copyValues = true, bool fillZeros = true) {
     NimArrBase<T>::NAdims[0] = size1 = is1;
     NimArrBase<T>::NAdims[1] = size2 = is2;
     NimArrBase<T>::NAdims[2] = size3 = is3;
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;
     NimArrBase<T>::NAstrides[1] = stride2 = is1;    
     NimArrBase<T>::NAstrides[2] = stride3 = is1*is2;
-    NimArrBase<T>::setLength(stride3 * size3);
+    NimArrBase<T>::setLength(stride3 * size3, copyValues, fillZeros);
   }
 
   
@@ -715,11 +725,17 @@ class NimArr<4, T> : public NimArrBase<T> {
   int calculateIndex(vector<int> &i) const {return(calculateIndex(i[0], i[1], i[2], i[3]));};
   T &operator()(int i, int j, int k, int l) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j, k, l)]);} // could add asserts here
 
+  T &operator[](int i) const {
+    std::div_t divRes1 = std::div(i, size1);
+    std::div_t divRes2 = std::div(floor(divRes1.quot), size2);
+    std::div_t divRes3 = std::div(floor(divRes2.quot), size3);
+    return((*NimArrBase<T>::vPtr)[calculateIndex(divRes1.rem, divRes2.rem, divRes3.rem, floor(divRes3.quot))]);
+  }
+  
   ~NimArr<4, T>() {};
 
   template<class Tother>
     NimArr<4, T> &mapCopy(const NimArr<4, Tother> &other) {
-    // std::cout<<"In NimArr<3, T> mapCopy\n";
     if(size1 != other.size1) {
       PRINTF("Error in mapCopy.  Sizes 1 don't match: %i != %i \n", size1, other.size1);
     }
@@ -758,13 +774,10 @@ class NimArr<4, T> : public NimArrBase<T> {
       from += (-size3 *otherStride3) + otherStride4;
       to += (-size3 * stride3 + stride4);
     }
-    // std::cout<<"Leaving NimArr<3, T> mapCopy\n";
     return(*this);
   }
 
   NimArr<4, T> &operator=(const NimArr<3, T> &other) {
-    // std::cout<<"Using operator= for a NimArr<3, T>\n";
-
     if(NimArrBase<T>::isMap()) {
       return(mapCopy(other));
     }
@@ -783,8 +796,6 @@ class NimArr<4, T> : public NimArrBase<T> {
     NimArrBase<T>::boolMap = false;
     NimArrBase<T>::offset = 0;
    
-    // vPtr, NAstrides, offset, stride1, boolMap
-    //    NimArrBase<T>::NAstrides.resize(2); 
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;   
     NimArrBase<T>::NAstrides[1] = stride2 = size1;   
     NimArrBase<T>::NAstrides[2] = stride3 = size1 * size2;   
@@ -826,13 +837,13 @@ class NimArr<4, T> : public NimArrBase<T> {
       std::copy(other.v, other.v + NimArrBase<T>::NAlength, NimArrBase<T>::v);
     }
     NimArrBase<T>::setVptr();
-    // std::cout<<"Leaving operator= for a NimArr<3, T>\n";
     return(*this);
   }
 
   NimArr<4, T> (const NimArr<4, T> &other) :
   NimArrBase<T>(other)
   {
+
     //    NimArrBase<T>::NAdims = other.dim();
     //NimArrBase<T>::NAdims = new int[4];
     std::memcpy(NimArrBase<T>::NAdims, other.dim(), 4 * sizeof(int));
@@ -968,7 +979,12 @@ class NimArr<4, T> : public NimArrBase<T> {
     setSize(is1, is2, is3, is4);
   }
 
-  void setSize(int is1, int is2, int is3, int is4) {
+  void initialize(T value, bool init, int is1, int is2, int is3, int is4) {
+    setSize(is1, is2, is3, is4, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value); }
+  }
+
+  void setSize(int is1, int is2, int is3, int is4, bool copyValues = true, bool fillZeros = true) {
     NimArrBase<T>::NAdims[0] = size1 = is1;
     NimArrBase<T>::NAdims[1] = size2 = is2;
     NimArrBase<T>::NAdims[2] = size3 = is3;
@@ -977,10 +993,9 @@ class NimArr<4, T> : public NimArrBase<T> {
     NimArrBase<T>::NAstrides[1] = stride2 = is1;    
     NimArrBase<T>::NAstrides[2] = stride3 = is1*is2;
     NimArrBase<T>::NAstrides[3] = stride4 = is1 * is2 * is3;
-    NimArrBase<T>::setLength(stride4 * size4);
+    NimArrBase<T>::setLength(stride4 * size4, copyValues, fillZeros);
   }
 
-  
   virtual void setSize(vector<int> sizeVec) {setSize(sizeVec[0], sizeVec[1], sizeVec[2], sizeVec[3]);}
   virtual int numDims() const {return(4);}
   virtual int dimSize(int i) const {
@@ -1008,7 +1023,9 @@ class NimArr<4, T> : public NimArrBase<T> {
 template<int ndim, class T>
 class VecNimArr : public VecNimArrBase<T>  {
  public:
-  ~VecNimArr<ndim, T>() {};
+  ~VecNimArr<ndim, T>() {
+    //  PRINTF("In VecNimArr destructor\n");
+  };
   std::vector< NimArr<ndim, T> > values;
   NimArr<ndim, T> &operator[](unsigned int i) {
     if(i >= values.size()) {
@@ -1090,56 +1107,6 @@ class VecNimArr : public VecNimArrBase<T>  {
 
 
 };
-
-
-/* template<> */
-/* template<class Tfrom> */
-/* void NimArrBase<double>::genericMapCopy(int offset, vector<int> &str, vector<int> &is, NimArrBase<Tfrom> *from, int fromOffset, vector<int> &fromStr, vector<int> &fromIs) { */
-/*     if(isMap() || from->isMap()) std::cout<<"Error, genericMapCopy is not set up for nested maps\n"; */
-/*     int nDim = numDims(); */
-/*     switch(nDim) { */
-/*     case 1: // explicitly downcasting because I couldn't do it with template member function of template class, or didn't figure it out. */
-/*       static_cast< NimArr<1, double> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     case 2: */
-/*       static_cast< NimArr<2, double> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     case 3: */
-/*       static_cast< NimArr<3, double> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     case 4: */
-/*       static_cast< NimArr<4, double> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     default: */
-/*       std::cout<<"Error in copying: more than 4 dimensions not supported yet\n"; */
-      
-/*     } */
-
-/* } */
-
-/* template<> */
-/* template<class Tfrom> */
-/* void NimArrBase<int>::genericMapCopy(int offset, vector<int> &str, vector<int> &is, NimArrBase<Tfrom> *from, int fromOffset, vector<int> &fromStr, vector<int> &fromIs) { */
-/*     if(isMap() || from->isMap()) std::cout<<"Error, genericMapCopy is not set up for nested maps\n"; */
-/*     int nDim = numDims(); */
-/*     switch(nDim) { */
-/*     case 1: // explicitly downcasting because I couldn't do it with template member function of template class, or didn't figure it out. */
-/*       static_cast< NimArr<1, int> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     case 2: */
-/*       static_cast< NimArr<2, int> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     case 3: */
-/*       static_cast< NimArr<3, int> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     case 4: */
-/*       static_cast< NimArr<4, int> *>(this)->dynamicMapCopy<Tfrom>(offset, str, is, from, fromOffset, fromStr, fromIs); */
-/* 	break; */
-/*     default: */
-/*       std::cout<<"Error in copying: more than 4 dimensions not supported yet\n"; */
-      
-/*     } */
-/* } */
 
 template <class Tfrom, class Tto, int mapDim>
 void dynamicMapCopyDim(NimArrType *toNimArr, int toOffset, vector<int> &toStr, vector<int> &toIs, NimArrType *fromNimArr, int fromOffset, vector<int> &fromStr, vector<int> &fromIs) {

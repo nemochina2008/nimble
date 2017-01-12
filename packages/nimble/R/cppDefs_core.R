@@ -139,7 +139,7 @@ cppClassDef <- setRefClass('cppClassDef',
                                        objectDefsToUse <- if(inherits(objectDefs, 'symbolTable')) objectDefs$symbols else objectDefs
                                        output <- c(generateClassHeader(name, inheritance),
                                                    list('public:'), ## In the future we can separate public and private
-                                                   lapply(generateObjectDefs(objectDefsToUse), pasteSemicolon, indent = '  '),
+                                                   lapply(generateObjectDefs(objectDefsToUse), function(x) if(length(x)==0) '' else pasteSemicolon(x, indent = '  ')),
                                                    generateAll(functionDefs, declaration = TRUE),
                                                    '};'
                                                )
@@ -157,7 +157,7 @@ cppClassDef <- setRefClass('cppClassDef',
                                                        else character(0)
                                    if(is.null(finalizer)) finalizer <- paste0(name,'_Finalizer')
                                    codeLines <- substitute({
-                                       R_RegisterCFinalizerEx(Sans, cppReference(FINALIZER), FALSE) ## last argument is whether to call finalizer upon R exit.  If TRUE we can generate segfaults if the library has been dyn.unloaded, unfortunately
+                                       ## R_RegisterCFinalizerEx(Sans, cppReference(FINALIZER), FALSE) ## last argument is whether to call finalizer upon R exit.  If TRUE we can generate segfaults if the library has been dyn.unloaded, unfortunately
                                        UNPROTECT(1)
                                        return(Sans)
                                    }, list(TYPE = as.name(name), FINALIZER = as.name(finalizer)))

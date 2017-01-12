@@ -33,6 +33,8 @@ argType2symbol <- function(AT, name = character()) {
         return(symbolInternalType(name = name, type = "internal", argList = as.list(AT[-1]))) ## save all other contents for any custom needs later
     }
     nDim <- if(length(AT)==1) 0 else AT[[2]]
+    if(!is.numeric(nDim) || nDim %% 1 != 0)
+        stop("argType2symbol: unexpected dimension, '", AT[[2]], "', found in argument '", deparse(AT), "'. Dimension should be integer-valued.")
     size <- if(nDim == 0) 1 else {
         if(length(AT) < 3)
             as.numeric(rep(NA, nDim))
@@ -154,6 +156,15 @@ symbolString <- setRefClass(
         })
     )
 
+symbolNimbleTimer <- setRefClass(
+    Class = "symbolNimbleTimer",
+    contains = "symbolBase",
+    methods = list(
+        show = function() writeLines(paste('symbolNimbleTimer', name)),
+        genCppVar = function(...) {
+            cppVar(name = name, baseType = "nimbleTimerClass_")
+        }))
+
 symbolNimArrDoublePtr <- 
     setRefClass(Class    = 'symbolNimArrDoublePtr',
                 contains = 'symbolBasic',
@@ -228,7 +239,7 @@ symbolModel <-
 symbolModelValues <- 
     setRefClass(Class = 'symbolModelValues',
                 contains = 'symbolBase',
-                fields = list(mvSpec = 'ANY'), 
+                fields = list(mvConf = 'ANY'), 
                 methods = list(
                     initialize = function(...) {
                         callSuper(...)
@@ -337,6 +348,21 @@ symbolGetParamInfo <-
                         stop(paste('Error, you should not be generating a cppVar for symbolGetParamInfo', name))
                     } ))
 
+symbolGetBoundInfo <-
+    setRefClass(Class = 'symbolGetBoundInfo',
+                contains = 'symbolBase',
+                fields = list(boundInfo = 'ANY'), ## getBound_info, i.e. simple list
+                methods = list(
+                    initialize = function(boundInfo, ...) {
+                        callSuper(...)
+                        boundInfo <<- boundInfo
+                        type <<- 'Ronly'
+                    },
+                    show = function() writeLines(paste('symbolGetBoundInfo', name)),
+                    genCppVar = function(...) {
+                        stop(paste('Error, you should not be generating a cppVar for symbolGetBoundInfo', name))
+                    } ))
+
 symbolNumericList <- 
     setRefClass(Class = 'symbolNumericList',
                 contains = 'symbolBase', 
@@ -411,12 +437,14 @@ symbolEigenMap <- setRefClass(Class = 'symbolEigenMap',
                                   genCppVar = function(functionArg = FALSE) {
                                       if(functionArg) stop('Error: cannot take Eigen Map as a function argument (without more work).')
                                       if(length(strides)==2 & eigMatrix) {
-                                          if(all(is.na(strides)))
+                                          if(all(is.na(strides))) {
+                                              baseType <- paste0('EigenMapStr', if(type == 'double') 'd' else if(type == 'integer') 'i' else 'b' )
                                               return(cppVarFull(name = name,
-                                                                baseType = 'EigenMapStr',
+                                                                baseType = baseType,
                                                                 constructor = '(0,0,0, EigStrDyn(0, 0))',
                                                                 ptr = 0,
                                                                 static = FALSE))
+                                          }
                                       }
                                       cppEigenMap(name = name,
                                                   type = type,
@@ -478,7 +506,9 @@ symbolInt <- function(name, size = numeric(), nDim = length(size)) {
 symbolTable <- 
     setRefClass(Class   = 'symbolTable',
                 fields  = list(symbols  = 'ANY', 		#'list',
-                               parentST = 'ANY'),
+                    parentST = 'ANY',
+                    dimAndSizeList = 'ANY',
+                    dimAndSizeListMade = 'ANY'),
                 methods = list(
                     initialize = function(parentST = NULL, ...) {
                         symbols  <<- list()
@@ -492,15 +522,20 @@ symbolTable <-
                                 }
                             } else stop('Error: symbols provided must be a list')
                         }
-                        parentST <<- parentST },
+                        parentST <<- parentST
+                        dimAndSizeListMade <<- FALSE
+                    },
                     
                     ## add a symbol RC object to this symbolTable; checks for valid symbolRC object, and duplicate symbol names
                     addSymbol  = function(symbolRCobject) {
                       ##  if(!is(symbolRCobject, 'symbolBase'))   stop('adding non-symbol object to symbolTable')
                         name <- symbolRCobject$name
                         if(name %in% getSymbolNames())            warning(paste0('duplicate symbol name: ', name))
-                        symbols[[name]] <<- symbolRCobject },
-                    
+                        symbols[[name]] <<- symbolRCobject
+                        if(dimAndSizeListMade) {
+                            dimAndSizeList[[name]] <<- {ans <- try(list(symbolRCobject$size, symbolRCobject$nDim)); if(inherits(ans, 'try-error')) NULL else ans}
+                        }
+                    },
                     ## remove a symbol RC object from this symbolTable; gives warning if symbol isn't in table
                     removeSymbol = function(name) {
                         if(!(name %in% getSymbolNames()))         warning(paste0('removing non-existant symbol name: ', name))
@@ -512,11 +547,22 @@ symbolTable <-
                     getSymbolNames   = function()      if(is.null(names(symbols))) return(character(0)) else return(names(symbols)),
                     getSymbolObject  = function(name, inherits = FALSE) {
                         ans <- symbols[[name]]
-                        if(is.null(ans) & inherits & !is.null(parentST)) ans <- parentST$getSymbolObject(name, TRUE)
+                        if(is.null(ans)) if(inherits) if(!is.null(parentST)) ans <- parentST$getSymbolObject(name, TRUE)
                         return(ans)
                     },
                     symbolExists = function(name, inherits = FALSE) {
                         return(!is.null(getSymbolObject(name, inherits)))
+                    },
+                    initDimAndSizeList = function() {
+                        dimAndSizeList <<- lapply(symbols, function(x) {
+                            ans <- try(list(x$size, x$nDim))
+                            if(inherits(ans, 'try-error')) NULL else ans
+                        })
+                        dimAndSizeListMade <<- TRUE
+                    },
+                    makeDimAndSizeList = function(names) {
+                        if(!dimAndSizeListMade) initDimAndSizeList()
+                        dimAndSizeList[names]
                     },
                     getSymbolType    = function(name)               return(symbols[[name]]$type),
                     getSymbolField   = function(name, field)        return(symbols[[name]][[field]]),

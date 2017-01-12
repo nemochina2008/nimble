@@ -10,19 +10,32 @@ nfGetDefVar <- function(f, var) {
     return(environment(nf_getGeneratorFunction(f))[[var]])
 }
 
-is.nf <- function(f) {
+#' check if a nimbleFunction
+#'
+#' Checks an object to determine if it is a nimbleFunction (i.e., a function created by \code{nimbleFunction} using setup code).
+#'
+#' @param f object to be tested
+#'
+#' @param inputIsName logical indicating whether the function is provided as the character name of the function or the function object itself
+#'
+#' @seealso \link{nimbleFunction} for how to create a nimbleFunction
+#' @export
+is.nf <- function(f, inputIsName = FALSE) {
+    if(inputIsName) f <- get(f)
     if(inherits(f, 'nimbleFunctionBase')) return(TRUE)
-    #	$runRelated
-    return(is.function(f) && 
+    return(is.function(f) && !is.null(environment(f)) &&  
                existsFunctionEnvVar(f, 'nfRefClassObject') ) 	
 }
 
-is.Cnf <- function(f) {
+is.Cnf <- function(f, inputIsName = FALSE) {
+    if(inputIsName) f <- get(f)
     if(inherits(f, 'CnimbleFunctionBase')) return(TRUE)
     return(FALSE)
 }
 
-is.nfGenerator <- function(f) {
+
+is.nfGenerator <- function(f, inputIsName = FALSE) {
+    if(inputIsName) f <- get(f)
     return(is.function(f) && 
                existsFunctionEnvVar(f, 'generatorFunction') &&
                existsFunctionEnvVar(f, 'nfRefClassDef') &&
@@ -31,8 +44,6 @@ is.nfGenerator <- function(f) {
 
 nf_getRefClassObject <- function(f) {
     if(is.nfGenerator(f))     stop('trying to access RefClassObject from nimbleFunction generator.\nError: need to use the specialized nimbleFunction')
-    
-    #	$runRelated
     if(inherits(f, 'nimbleFunctionBase')) 	return(f)
     if(inherits(f, 'CnimbleFunctionBase'))	return(f)
     
@@ -44,9 +55,6 @@ nf_getGeneratorFunction <- function(f) {
     if(is.nfGenerator(f))    return(f)
     if(is.nf(f))             return(nf_getRefClassObject(f)$.generatorFunction)
     if(is.Cnf(f))            return(nf_getGeneratorFunction(f$Robject))
-    
-    #if(is.refObject(f))		return(f$.generatorFunction)
-    
     stop('invalid nimbleFunction argument\n')
 }
 

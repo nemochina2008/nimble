@@ -25,7 +25,7 @@ distributionsInputList <- list(
     dbin    = list(BUGSdist = 'dbin(prob, size)',
                    Rdist    = 'dbinom(size, prob)',
                    discrete = TRUE,
-                   range = c(0, Inf),
+                   range = c('lower = 0', 'upper = size'),
                    pqAvail = TRUE,
                    alias   = 'dbinom'),
     
@@ -47,13 +47,6 @@ distributionsInputList <- list(
                          range    = c(0, Inf),
                          discrete = TRUE),
 
-    dmulti  = list(BUGSdist = 'dmulti(prob, size)',
-                   Rdist    = 'dmulti(size, prob)',
-                   types    = c('value = double(1)', 'prob = double(1)'),
-                   range    = c(0, Inf),
-                   discrete = TRUE,
-                   alias    = 'dmultinom'),
-    
     dnegbin = list(BUGSdist = 'dnegbin(prob, size)',
                    Rdist    = 'dnbinom(size, prob)',
                    discrete = TRUE,
@@ -115,10 +108,7 @@ distributionsInputList <- list(
     dnorm   = list(BUGSdist = 'dnorm(mean, tau, sd, var)',
                    Rdist    = c('dnorm(mean, sd = 1/sqrt(tau))', 'dnorm(mean, sd = sqrt(var))'),
                    altParams= c('tau = sd^-2', 'var = sd*sd'),
-#                   altParams= c('tau = sd^-2', 'var = sd^2'),
                    pqAvail = TRUE),
-    
-    ## dpar    = list(BUGSdist = 'dpar(alpha, c)'),   ## not sure the state of this?  -DT
     
     dt      = list(BUGSdist = 'dt(mu, tau, df, sigma, sigma2)',
                    Rdist    = c('dt_nonstandard(df, mu, sigma = 1/sqrt(tau))',
@@ -126,7 +116,10 @@ distributionsInputList <- list(
                    altParams = c('tau = sigma^-2', 'sigma2 = sigma^2'),
                    pqAvail = TRUE),
     
-    dunif   = list(BUGSdist = 'dunif(min, max)',
+    dunif   = list(BUGSdist = 'dunif(min, max, mean, sd)',
+                   Rdist    = c('dunif(min = mean - sqrt(3)*sd, max = mean + sqrt(3)*sd)'),
+                   altParams = c('mean = (min + max)/2', 'sd = (max - min)/sqrt(12)'),
+                   range = c('lower = min', 'upper = max'),
                    pqAvail = TRUE),
     
     dweib   = list(BUGSdist = 'dweib(shape, lambda, scale, rate)',
@@ -153,11 +146,21 @@ distributionsInputList <- list(
                    altParams= c('prec = calc_dmnormAltParams(cholesky, prec_param, 1)', 'cov = calc_dmnormAltParams(cholesky, prec_param, 0)'),
                    types    = c('value = double(1)', 'mean = double(1)', 'cholesky = double(2)', 'prec = double(2)', 'cov = double(2)')),
     
-    ## dmt     = list(BUGSdist = 'dmt(mu, T, k)'),   ## not sure the state of this?  -DT
+    dmulti  = list(BUGSdist = 'dmulti(prob, size)',
+                   Rdist    = 'dmulti(size, prob)',
+                   types    = c('value = double(1)', 'prob = double(1)'),
+                   range    = c(0, Inf),
+                   discrete = TRUE,
+                   alias    = 'dmultinom'),
+    
+    dmvt  = list(BUGSdist = 'dmvt(mu, prec, scale, cholesky, df, prec_param)',
+                   Rdist    = c('dmvt_chol(mu, cholesky = chol(prec), df = df, prec_param = 1)', 'dmvt_chol(mu, cholesky = chol(scale), df = df, prec_param = 0)', 'dmvt_chol(mu, cholesky, df = df, prec_param)'),
+                   ## I think it's okay to use the same altParams function for multivariate normal and t
+                   altParams= c('prec = calc_dmnormAltParams(cholesky, prec_param, 1)', 'scale = calc_dmnormAltParams(cholesky, prec_param, 0)'),
+                   types    = c('value = double(1)', 'mu = double(1)', 'cholesky = double(2)', 'df = double(0)', 'prec = double(2)', 'scale = double(2)')),
     
     dwish   = list(BUGSdist = 'dwish(R, df, S)',
                    Rdist    = c('dwish_chol(cholesky = chol(R), df, scale_param = 0)', 'dwish_chol(cholesky = chol(S), df, scale_param = 1)'),
-                  # altParams = c('R = cholesky', 'S = cholesky'), ##NOT CORRECT. These are placeholders to get other parts working.
                    altParams = c('R = inverse(t(cholesky)%*%cholesky)', 'S = inverse(t(cholesky)%*%cholesky)'),
                    alias    = 'dwishart',
                    types    = c('value = double(2)', 'R = double(2)', 'S = double(2)', 'cholesky = double(2)'))

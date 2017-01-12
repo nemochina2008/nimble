@@ -7,9 +7,9 @@ nimbleOrRfunctionNames <- c('[','+','-','/','*','(','exp','log','pow','^','%%','
                             'sin','cos','tan','asin','acos','atan','cosh','sinh','tanh', 'asinh', 'acosh', 'atanh',
                             'cube', 'abs', 'lgamma', 'loggam', 'log1p', 'lfactorial', ##'factorial', 'gamma',
                             'ceiling', 'floor', 'round', 'trunc',
-                            'mean','sum','max','min','prod',
+                            'mean','sum','sd','var','max','min','prod',
                             'asRow', 'asCol',
-                            'chol', 'inverse', ## 'solve', 'forwardsolve', 'backsolve',  ## removed these from BUGS functions, pending problems with Eigen
+                            'chol', 'inverse', 'forwardsolve', 'backsolve', 'solve',   ## removed these from BUGS functions, pending problems with Eigen
                             '>', '<', '>=', '<=', '==', '!=', '&', '|',
                             distributionFuns,
                             # these are allowed in DSL as special cases even though exp_nimble and t_nonstandard are the canonical NIMBLE distribution functions
@@ -35,9 +35,9 @@ BUGSdeclClass <- setRefClass('BUGSdeclClass',
                                  targetVarName = 'ANY',
                                  targetNodeName = 'ANY',
                                  
-                                 ## truncation information
+                                 ## bounds/truncation information
                                  truncated = 'ANY',
-                                 range = 'ANY',
+                                 boundExprs = 'ANY',
                                  
                                  ## set in setIndexVariableExprs(), and never changes.
                                  indexVariableExprs = 'ANY',
@@ -81,6 +81,7 @@ BUGSdeclClass <- setRefClass('BUGSdeclClass',
                                  genSymbolicParentNodes         = function() {},
                                  genReplacementsAndCodeReplaced = function() {},
                                  genAltParamsModifyCodeReplaced = function() {},
+                                 genBounds                      = function() {},
 
                                  genReplacedTargetValueAndParentInfo = function() {},
 
@@ -115,15 +116,17 @@ BUGSdeclClass <- setRefClass('BUGSdeclClass',
                                      return(c(edgesIn, edgesOut))
                                  },
                                  getDistributionName = function() {
-                                     if(type != 'stoch')  stop('getting distribution of non-stochastic node')
-                                     return(distributionName)
+                                     return(distributionName) 
                                      ##return(as.character(valueExprReplaced[[1]]))
+                                 },
+                                 isTruncated = function() {
+                                     return(truncated) 
                                  }
                              )
 )
 
 
-BUGSdeclClass$methods(setup = function(code, contextID, sourceLineNum, truncated = FALSE, range = NULL) {
+BUGSdeclClass$methods(setup = function(code, contextID, sourceLineNum, truncated = FALSE, boundExprs = NULL) {
     ## master entry function.
     ## uses 'contextID' to set the field: contextID.
     ## uses 'code' argument, to set the fields:
@@ -136,16 +139,16 @@ BUGSdeclClass$methods(setup = function(code, contextID, sourceLineNum, truncated
     sourceLineNumber <<- sourceLineNum
     code <<- code
     truncated <<- truncated
-    range <<- range
+    boundExprs <<- boundExprs
     
     if(code[[1]] == '~') {
         type <<- 'stoch'
 
-        if(!is.call(code[[3]]) || (!any(code[[3]][[1]] == getDistributionsInfo('namesVector')) && code[[3]][[1]] != "T" && code[[3]][[1]] != "I"))
+        if(!is.call(code[[3]]) || (!any(code[[3]][[1]] == getAllDistributionsInfo('namesVector')) && code[[3]][[1]] != "T" && code[[3]][[1]] != "I"))
             stop(paste0('Improper syntax for stochastic declaration: ', deparse(code)))
     } else if(code[[1]] == '<-') {
         type <<- 'determ'
-        # if( is.call(code[[3]]) &&  any(code[[3]][[1]] == getDistributionsInfo('namesVector')))
+        # if( is.call(code[[3]]) &&  any(code[[3]][[1]] == getAllDistributionsInfo('namesVector')))
         #    stop(paste0('Improper syntax for determistic declaration: ', deparse(code)))
         # commented out by CJP 7/30/15 as preventing use of "<- dDIST()", which we now allow
     } else {
@@ -188,15 +191,6 @@ BUGSdeclClass$methods(setup = function(code, contextID, sourceLineNum, truncated
     
     targetVarName <<- deparse(targetVarExpr)
     targetNodeName <<- deparse(targetNodeExpr)
-
-    if(type == 'stoch' && is.null(range)) {
-        tmp <- as.character(valueExpr[[1]])
-        if(!(tmp %in% c("T", "I"))) {
-            # T/I not always stripped out at this stage
-            distRange <- getDistribution(tmp)$range
-            range <<- list(lower = distRange[1], upper = distRange[2])
-        }
-    }
 })
 
 
@@ -261,7 +255,7 @@ BUGSdeclClass$methods(genReplacementsAndCodeReplaced = function(constantsNamesLi
 ## only affects stochastic nodes
 ## removes any params in codeReplaced which begin with '.'
 ## generates the altParamExprs list, which contains the expression for each alternate parameter,
-## which is taken from the .param expression (no longer taken from getDistribution(distName)$altParams, ever)
+## which is taken from the .param expression (no longer taken from getDistributionInfo(distName)$altParams, ever)
 BUGSdeclClass$methods(genAltParamsModifyCodeReplaced = function() {
     
     altParamExprs <<- list()
@@ -276,17 +270,47 @@ BUGSdeclClass$methods(genAltParamsModifyCodeReplaced = function() {
             
             altParamExprs <<- if(any(paramNamesDotLogicalVector)) as.list(RHSreplaced[paramNamesDotLogicalVector]) else list()
             names(altParamExprs) <<- gsub('^\\.', '', names(altParamExprs))    ## removes the '.' from each name
-                                        #         dotParamNames <- names(dotParamExprs)
-                                        #         distRuleAltParamExprs <- getDistribution(as.character(RHSreplaced[[1]]))$altParams
-                                        #         for(altParam in names(distRuleAltParamExprs)) {
-                                        #             if(altParam %in% dotParamNames) {
-                                        #                 altParamExprs[[altParam]] <<- dotParamExprs[[altParam]]
-                                        #             } else {
-                                        #                 defaultParamExpr <- getDistributions(as.character(RHSreplaced[[1]]))$altParams[[altParam]]
-                                        #                 subParamExpr <- eval(substitute(substitute(EXPR, as.list(RHSreplaced)[-1]), list(EXPR=defaultParamExpr)))
-                                        #                 altParamExprs[[altParam]] <<- subParamExpr
-                                        #             }
-                                        #         }
+        }
+    }
+})
+
+## only affects stochastic nodes
+## generates the boundExprs list, which contains the expression for both lower and upper
+## which is taken from the lower and upper expression
+## if not truncated, remove 'lower' and 'upper' from codeReplaced as not needed for standard nodeFunctions (and in nodeFunction creation, it checks for presence of lower,upper to indicate truncation since only has access to RHS code not to full declInfo)
+BUGSdeclClass$methods(genBounds = function() {
+    boundExprs <<- list()
+    if(type == 'stoch') {
+        RHSreplaced <- codeReplaced[[3]]
+        if(length(RHSreplaced) > 1) { ## It actually has argument(s)
+            boundNames <- c('lower', 'upper')
+            boundExprs <<- as.list(RHSreplaced[boundNames])
+            if(truncated) {  # check for user-provided constant bounds inconsistent with distribution range
+                distName <- as.character(RHSreplaced[[1]])
+                distRange <- getDistributionInfo(distName)$range
+                if(is.numeric(boundExprs$lower) && is.numeric(distRange$lower) &&
+                   is.numeric(boundExprs$upper) && is.numeric(distRange$upper) &&
+                   boundExprs$lower <= distRange$lower && boundExprs$upper >= distRange$upper)  # user specified bounds irrelevant
+                    truncated <<- FALSE
+                
+                if(is.numeric(boundExprs$lower) && is.numeric(boundExprs$upper) && boundExprs$lower >= boundExprs$upper)
+                    warning(paste0("Lower bound is greater than or equal to upper bound in ", deparse(codeReplaced), "; proceeding anyway, but this is likely to cause numerical issues."))
+                if(is.numeric(boundExprs$lower) && is.numeric(distRange$lower) && boundExprs$lower < distRange$lower) {
+                    warning(paste0("Lower bound is less than or equal to distribution lower bound in ", deparse(codeReplaced), "; ignoring user-provided lower bound."))
+                    boundExprs$lower <<- distRange$lower
+                    codeReplaced[[3]]['lower'] <<- distRange$lower
+                }
+                if(is.numeric(boundExprs$upper) && is.numeric(distRange$upper) && boundExprs$upper > distRange$upper) {
+                    warning(paste0("Upper bound is greater than or equal to distribution upper bound in ", deparse(codeReplaced), "; ignoring user-provided upper bound."))
+                    boundExprs$upper <<- distRange$upper
+                    codeReplaced[[3]]['upper'] <<- distRange$upper
+                }
+            }
+            if(!truncated) {
+                 boundNamesLogicalVector <- names(RHSreplaced) %in% boundNames
+                 RHSreplacedWithoutBounds <- RHSreplaced[!boundNamesLogicalVector]    
+                 codeReplaced[[3]] <<- RHSreplacedWithoutBounds
+            }
         }
     }
 })
@@ -295,7 +319,7 @@ getSymbolicParentNodes <- function(code, constNames = list(), indexNames = list(
     ## replaceConstants looks to see if name of a function exists in R
     ## getSymbolicVariables requires a list of nimbleFunctionNames.
     ## The latter could take the former approach
-    if(addDistNames) nimbleFunctionNames <- c(nimbleFunctionNames, getDistributionsInfo('namesExprList'))
+    if(addDistNames) nimbleFunctionNames <- c(nimbleFunctionNames, getAllDistributionsInfo('namesExprList'))
     ans <- getSymbolicParentNodesRecurse(code, constNames, indexNames, nimbleFunctionNames)
     return(ans$code)
 }
@@ -379,14 +403,12 @@ getSymbolicParentNodesRecurse <- function(code, constNames = list(), indexNames 
             funName <- deparse(code[[1]])
             isRonly <- isRfunction &
                 !checkNimbleOrRfunctionNames(funName)
-#                !any(deparse(code[[1]]) == nimbleOrRfunctionNames)
             if(isRonly & !allContentsReplaceable) {
                 if(!exists(funName))
                     stop("R function '", funName,"' does not exist.")
                 unreplaceable <- sapply(contents[!contentsReplaceable], function(x) as.character(x$code))
                 stop("R function '", funName,"' has arguments that cannot be evaluated; either the function must be a nimbleFunction or values for the following inputs must be specified as constants in the model: ", paste(unreplaceable, collapse = ","), ".")
             }
-            # old text:  non-replaceable node values as arguments.  Must be a nimble function.
 
             return(list(code = contentsCode,
                         replaceable = allContentsReplaceable & isRfunction,
@@ -452,7 +474,6 @@ genReplacementsAndCodeRecurse <- function(code, constAndIndexNames, nimbleFuncti
         if(code[[1]] == ':')   return(replaceWhatWeCan(code, contentsCodeReplaced, contentsReplacements, contentsReplaceable, startingAt=2)) ## for newNodeFxns, use default replaceable = FALSE for any ':' expression.  old: , replaceable=allContentsReplaceable))
         if(assignment)         return(replaceWhatWeCan(code, contentsCodeReplaced, contentsReplacements, contentsReplaceable, startingAt=2))
         isRfunction <- !any(code[[1]] == nimbleFunctionNames)
-#        isRonly <- isRfunction & !any(deparse(code[[1]]) == nimbleOrRfunctionNames)
         isRonly <- isRfunction & !checkNimbleOrRfunctionNames(deparse(code[[1]]))
         if(isRonly & !allContentsReplaceable) stop(paste0('Error, R function \"', deparse(code[[1]]),'\" has non-replaceable node values as arguments.  Must be a nimble function.'))
         if(isRfunction & allContentsReplaceable)   return(replaceAllCodeSuccessfully(code))

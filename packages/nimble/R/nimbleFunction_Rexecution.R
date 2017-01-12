@@ -1,6 +1,44 @@
 ###		These functions are used for calculate/sim/getLP for the nodeFunctionVectors
 ###		Can either enter model, nodes or model_nodes
 
+nimC <- function(...) {
+    c(...)
+}
+
+nimRep <- function(x, ...) {
+    rep(x, ...)
+}
+
+nimSeq <- function(from, to, by, length.out) { ## this creates default arguments filled in at keyword matching that are then useful in cppOutput step to determine if C++ should use nimSeqBy or nimSeqLen
+    haveBy <- !missing(by)
+    haveLen <- !missing(length.out)
+    if(haveBy)
+        if(haveLen)
+            seq(from, to, by, length.out)
+        else
+            seq(from, to, by)
+    else
+        if(haveLen)
+            seq(from, to, length.out = length.out)
+        else
+            seq(from, to)
+}
+
+#' Explicitly declare objects created in setup code to be preserved and compiled as member data
+#'
+#' Normally a \code{nimbleFunction} determines what objects from \code{setup} code need to be preserved for \code{run} code or other member functions.  \code{setupOutputs} allows explicit declaration for cases when an object created in setup output is not use in member functions.
+#' 
+#' @name setupOutputs
+#'
+#' @param ... An arbitrary set of names
+#'
+#' @details
+#' Normally any object created in \code{setup} code whose name appears in \code{run} or another member function is included in the save results of setup code.  When the nimbleFunction is compiled, such objects will become member data of the resulting C++ class.  If it is desired to force an object to become member data even if it does not appear in a member function, declare it using \code{setupOutputs}.  E.g. \code{setupOutputs(a, b)} declares that \code{a} and \code{b} should be preserved.
+#'
+#' The \code{setupOutputs} line will be removed from the setup code.  It is really a marker during nimbleFunction creation of what should be preserved.
+#' 
+NULL
+
 #' Halt execution of a nimbleFunction function method.  Part of the NIMBLE language
 #'
 #' @param msg Character object to be output as an error message
@@ -12,6 +50,18 @@
 nimStop <- function(msg) stop(msg, call. = FALSE)
 # we use call.=FALSE because otherwise the error msg indicates the
 # error itself occurs in nimStop() and not in the calling frame
+
+#' Time execution of NIMBLE code
+#'
+#' @param code code to be timed
+#'
+#' @author NIMBLE Development Team
+#' @details
+#' Function for use in nimbleFunction run code; when nimbleFunctions are run in R, this simply wraps \code{system.time}.
+#' @export
+run.time <- function(code) {
+    as.numeric(system.time(code)[3])
+}
 
 #' Check for interrupt (e.g. Ctrl-C) during nimbleFunction execution. Part of the NIMBLE language.
 #'
@@ -42,6 +92,8 @@ asRow <- function(x) {
 }
 
 ## Aliased in asRow
+#' @rdname asRow
+#' @export
 asCol <- function(x) {
     matrix(x, ncol = 1)
 }
@@ -50,26 +102,35 @@ asCol <- function(x) {
 #'
 #' Creates a simple getParam_info object, which has a list with a paramID and a type
 #'
-#' @param model A model such as returned by \link{nimbleModel}.
+#' @param model A model such as returned by \code{\link{nimbleModel}}.
 #'
-#' @param node A character string naming a stochastic node, such as "mu", "beta[2]", or "eta[1:3, 2]"
+#' @param nodes A character string naming one one or more stochastic nodes, such as "mu", "c('mu', 'beta[2]')", or "eta[1:3, 2]".  getParam only works for one node at a time, but if it is indexed (nodes[i]), then makeParamInfo sets up the information for the entire vector nodes.  The processing pathway is used by the NIMBLE compiler.
 #'
 #' @param param A character string naming a parameter of the distribution followed by node, such as "mean", "rate", "lambda", or whatever parameter names are relevant for the distribution of the node.
 #'
 #' @export
-#' @details This is used internally by \link{getParam}.  It is not intended for direct use by a user or even a nimbleFunction programmer. 
+#' @details This is used internally by \code{\link{getParam}}.  It is not intended for direct use by a user or even a nimbleFunction programmer.
 makeParamInfo <- function(model, nodes, param) {
-    ## updating to allow nodes to be a vector
-    distInfo <- getDistributionList(model$getNodeDistribution(nodes))
-    paramIDvec <- unlist(lapply(distInfo, function(x) x$paramIDs[param]))
-    typeVec <- unlist(lapply(distInfo, function(x) x$types[[param]]$type))
-    nDimVec <- unlist(lapply(distInfo, function(x) x$types[[param]]$nDim))
-    if(length(unique(typeVec)) != 1 | length(unique(nDimVec)) != 1) stop('cannot have multiple nodes accessed by the same getParam if they have different types or dimensions for the same parameter.') 
-##    ans <- c(list(paramID = distInfo$paramIDs[param]), distInfo$types[[param]])
-    ans <- c(list(paramID = paramIDvec), distInfo[[1]]$types[[param]])
+    ## updating to allow nodes to be a vector. getParam only works for a scalar but in a case like nodes[i] the param info is set up for the entire vector.
+    distNames <- model$getDistribution(nodes)
+
+    ## if(length(nodes) != 1) stop(paste0("Problem with nodes argument while setting up getParam.  Should be length 1 but was: ", paste0(nodes, collapse = ",")))
+    ## distInfo <- getDistributionList(model$getDistribution(nodes))[[1]]
+    ## ## If nodes is invalid, an error from the above line will be trapped in parseEvalNumericMany
+    if(length(param) != 1) stop(paste0(paste0('Problem with param(s) ', paste0(param, collapse = ','), ' while setting up getParam for node ', nodes,
+                 '\nOnly one parameter is allowed.')))
+    ## paramID <- distInfo$paramIDs[param]
+    ## if(length(paramID)!=1 | any(is.na(paramID))) stop(paste0('Problem with param ', paste0(param, collapse = ','), ' while setting up getParam for node ', nodes,
+    ##                                    '\nThe parameter name is not valid.'))
+    paramIDvec <- sapply(distNames, getParamID, param)
+    typeVec <- sapply(distNames, getType, param)
+    nDimVec <- sapply(distNames, getDimension, param)
+    if(length(unique(typeVec)) != 1 || length(unique(nDimVec)) != 1) stop('cannot have an indexed vector of nodes used in getParam if they have different types or dimensions for the same parameter.') 
+    ans <- c(list(paramID = paramIDvec), type = typeVec[1], nDim = nDimVec[1])
     class(ans) <- 'getParam_info'
     ans
 }
+
 
 #' Get value of a parameter of a stochastic node in a model
 #'
@@ -80,12 +141,14 @@ makeParamInfo <- function(model, nodes, param) {
 #' @param node  The name of a stochastic node in the model
 #'
 #' @param param The name of a parameter for the node
-#' 
+#'
+#' @param nodeFunctionIndex For internal NIMBLE use only
+#'
 #' @export
 #' @details For example, suppose node 'x[1:5]' follows a multivariate
 #' normal distribution (dmnorm) in a model declared by BUGS code.
 #' getParam(model, 'x[1:5]', 'mean') would return the current value of
-#' the mean parameter (which may be determined from other nodse).  The
+#' the mean parameter (which may be determined from other nodes).  The
 #' parameter requested does not have to be part of the
 #' parameterization used to declare the node.  Rather, it can be any
 #' parameter known to the distribution.  For example, one can request
@@ -94,10 +157,14 @@ makeParamInfo <- function(model, nodes, param) {
 getParam <- function(model, node, param, nodeFunctionIndex) {
     if(missing(param)) { ## already converted by keyword conversion
         stop('This case of getParam (after keyword replacement) has not been updated for R execution with newNodeFunction system')
+        ## nodeFunctionIndex would only be used here, when we make this part work
         nodeFunction <- model
         paramInfo <- node
     } else {
-        ## not already converted
+        ## not already converted; this is regular execution
+        if(length(node) != 1) stop(paste0("getParam only works for one node at a time, but", length(node), "were provided."))
+        ## makeParamInfo, called by nodeFunctionVector, will check on length of param
+        ## nodeFunctionIndex should never be used.
         nfv <- nodeFunctionVector(model, node)
         indexingInfo <- nfv$indexingInfo
         declID <- indexingInfo$declIDs[1] ## should only be one
@@ -109,9 +176,88 @@ getParam <- function(model, node, param, nodeFunctionIndex) {
     type <- paramInfo$type
     unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ indexingInfo$unrolledIndicesMatrixRows[1], ]
     funName <- paste0('getParam_',nDim,'D_',type)
-    ans <- eval(substitute(nodeFunction$FUNNAME(paramID, unrolledIndicesMatrixRow), list(FUNNAME = as.name(funName))))
+
+    useCompiledNonNestedInterface <- inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
+
+    if(useCompiledNonNestedInterface) {
+        ans <- model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], funName, paramID, unrolledIndicesMatrixRow)
+    } else 
+        ans <- eval(substitute(nodeFunction$FUNNAME(paramID, unrolledIndicesMatrixRow), list(FUNNAME = as.name(funName))))
     return(ans)
 }
+
+#' Make an object of information about a model-bound pairing for getBound.  Used internally
+#'
+#' Creates a simple getBound_info object, which has a list with a boundID and a type.
+#' Unlike \code{makeParamInfo} this is more bare-bones, but keeping it for parallelism
+#' with \code{getParam}.
+#'
+#' @param model A model such as returned by \code{\link{nimbleModel}}.
+#'
+#' @param nodes A character string naming a stochastic nodes, such as \code{'mu'}.
+#'
+#' @param bound A character string naming a bound of the distribution, either \code{'lower'} or \code{'upper'}.
+#'
+#' @export
+#' @details This is used internally by \code{\link{getBound}}.  It is not intended for direct use by a user or even a nimbleFunction programmer.
+makeBoundInfo <- function(model, nodes, bound) {
+    # note: would be good to work through this and makeParamInfo to ensure that both give good error messages and handle situation where user tries to pass in multiple nodes or multiple params/bounds
+    # note: also, it should be fine to combine symbolTable and sizeProcessing stuff for param and bound to avoid repetitive code
+    if(length(nodes) > 1) stop("'getBound' only set up to work with a single node'") # I think this is consistent with current getParam behavior
+    distInfo <- getDistributionList(model$getDistribution(nodes))
+    boundIDvec <- c('lower'=1,'upper'=2)[bound]
+    typeVec <- unlist(lapply(distInfo, function(x) x$types[['value']]$type)) # should always be 'double'
+    
+    # at moment have bound be scalar regardless of dimension of parameter, as assumed to be same value for all elements of a multivariate distribution; we are not fully handling truncation/bounds for multivariate nodes anyway:
+    nDimVec <- 0  # unlist(lapply(distInfo, function(x) x$types[['value']]$nDim))
+    ans <- c(list(boundID = boundIDvec, type = typeVec, nDim = nDimVec))
+    class(ans) <- 'getBound_info'
+    ans
+}
+
+#' Get value of bound of a stochastic node in a model
+#'
+#' Part of the NIMBLE language
+#'
+#' @param model A NIMBLE model object
+#'
+#' @param node  The name of a stochastic node in the model
+#'
+#' @param bound Either \code{'lower'} or \code{'upper'} indicating the desired bound for the node
+#'
+#' @param nodeFunctionIndex For internal NIMBLE use only
+#'
+#' @export
+#' @details For nodes that do not involve truncation of the distribution
+#' this will return the lower or upper bound of the distribution, which
+#' may be a constant or for a limited number of distributions a parameter
+#' or functional of a parameter (at the moment in NIMBLE, the only case
+#' where a bound is a parameter is for the uniform distribution. For nodes
+#' that are truncated, this will return the desired bound, which may be
+#' a functional of other quantities in the model or may be a constant. 
+getBound <- function(model, node, bound, nodeFunctionIndex) {
+    if(!bound %in% c('lower', 'upper'))
+        stop("getBound: 'bound' must be either 'lower' or 'upper'")
+    nfv <- nodeFunctionVector(model, node)
+    indexingInfo <- nfv$indexingInfo
+    declID <- indexingInfo$declIDs[1] ## should only be one
+    nodeFunction <- model$nodeFunctions[[ declID ]] 
+    boundInfo <- makeBoundInfo(model, node, bound)
+    boundID <- boundInfo$boundID
+    nDim <- boundInfo$nDim
+    type <- boundInfo$type
+    unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ indexingInfo$unrolledIndicesMatrixRows[1], ]
+    funName <- paste0('getBound_',nDim,'D_',type)
+
+    useCompiledNonNestedInterface <- inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
+
+    if(useCompiledNonNestedInterface) {
+        ans <- model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], funName, boundID, unrolledIndicesMatrixRow)
+    } else 
+        ans <- eval(substitute(nodeFunction$FUNNAME(boundID, unrolledIndicesMatrixRow), list(FUNNAME = as.name(funName))))
+    return(ans)
+}
+
 
 ## getParam <- function(model, node, param) {
 ##     if(missing(param)) { ## already converted by keyword conversion
@@ -203,7 +349,8 @@ rCalcDiffNodes <- function(model, nfv){
 #' @param model        A NIMBLE model, either the compiled or uncompiled version
 #' @param nodes        A character vector of node names, with index blocks allowed, such as 'x', 'y[2]', or 'z[1:3, 2:4]'
 #' @param nodeFxnVector An optional vector of nodeFunctions on which to operate, in lieu of \code{model} and \code{nodes}
-#' @param includeData  A logical argument specifying whether \code{data} nodes should be simulated into (only relevant for \link{simulate}
+#' @param nodeFunctionIndex For internal NIMBLE use only
+#' @param includeData  A logical argument specifying whether \code{data} nodes should be simulated into (only relevant for \code{\link{simulate}})
 #' @author NIMBLE development team
 #' @export
 #' @details
@@ -381,8 +528,6 @@ simulate <- function(model, nodes, includeData = FALSE, nodeFxnVector, nodeFunct
 # These functions work in R and in NIMBLE run-time code that can be compiled.
 #
 # @return NULL, but this function works by the side-effect of modifying P in the calling environment.
-
-
 getValues <- function(vals, model, nodes, envir = parent.frame()) {
     valsExp = substitute(vals)
     access = modelVariableAccessorVector(model, nodes, logProb = FALSE)
@@ -405,9 +550,6 @@ getValuesAccess <- function(access) {
     sourceFromObject <- access[[1]]
     unlist(lapply(fromCode, function(i) eval(i)))
 
-##    if(access$numAccessors==0) return(numeric()) ## NEW ACCESSORS
-##    unlist(lapply(1:access$numAccessors, function(i) access$getValues(i)))
-
 }
 
 
@@ -427,19 +569,6 @@ setValuesAccess <- function(input, access) {
     }
     invisible(NULL)
 
-    ## if(access$numAccessors==0) return(NULL) ## NEW ACCESSORS
-    ## nextIndex <- 0
-    ## if(access$getLength() != length(input)) {
-    ##     writeLines('Length of input does not match accessor')
-    ##     if(access$getLength() > length(input)) stop('Bailing out because not enough values were provided for accessor')
-    ##     writeLines('Too many input values provided.  Continuing anyway')
-    ## }
-    ## for(i in 1:length(access$code)) {
-    ##     nextLength <- access$getLength(i)
-    ##     access$setValues(i, input[nextIndex + (1:nextLength)])
-    ##     nextIndex <- nextIndex + nextLength
-    ## }
-    ## invisible(NULL)
 }
 
 
@@ -464,14 +593,15 @@ setValuesAccess <- function(input, access) {
 # These functions work in R and in NIMBLE run-time code that can be compiled.
 #
 # @return NULL, but this function works by the side-effect of modifying the model.
-
-
 setValues <- function(input, model, nodes){
 	access = modelVariableAccessorVector(model, nodes, logProb = FALSE)
 	setValuesAccess(input, access)
 }
 
-#' Access values for a set of nodes in a model
+
+#' Access or set values for a set of nodes in a model
+#'
+#' Access or set values for a set of nodes in a NIMBLE model. 
 #'
 #' @aliases values values<-
 #' 
@@ -480,7 +610,8 @@ setValues <- function(input, model, nodes){
 #'
 #' @param model       a NIMBLE model object, either compiled or uncompiled
 #' @param nodes       a vector of node names, allowing index blocks that will be expanded
-#'
+#' @param value       value to set the node(s) to
+#' 
 #' @author NIMBLE development team
 #' @export
 #' @details
@@ -503,6 +634,10 @@ values <- function(model, nodes){
 	ans
 }
 
+## # @rdname values
+
+#' @rdname values 
+#' @export
 `values<-` <- function(model, nodes, value){
 	setValues(value, model, nodes)
 	return(model)
@@ -614,7 +749,8 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
     ## }
 }
 
-
+#' Access or set a member variable of a nimbleFunction
+#' 
 #' Internal way to access or set a member variable of a nimbleFunction created during \code{setup}.  Normally in NIMBLE code you would use \code{nf$var} instead of \code{nfVar(nf, var)}. 
 #'
 #' @aliases nfVar nfVar<-
@@ -622,15 +758,16 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
 #' @description
 #' Access or set a member variable of a specialized nimbleFunction, i.e. a variable passed to or created during the \code{setup} function that is used in run code or preserved by \code{setupOutputs}.  Works in R for any variable and in NIMBLE for numeric variables.
 #'
-#' @param nf      A specialized nimbleFunction, i.e. a function returned by executing a function returned from \code{nimbleFunction} with \code{setup} arguments
-#' @param varName A character string naming a variable in the \code{setup} function.
+#' @param nf      a specialized nimbleFunction, i.e. a function returned by executing a function returned from \code{nimbleFunction} with \code{setup} arguments
+#' @param varName a character string naming a variable in the \code{setup} function.
+#' @param value value to set the variable to.
 #' @author NIMBLE development team
 #' @export
 #' @details
 #' When \code{nimbleFunction} is called and a \code{setup} function is provided, then \code{nimbleFunction} returns a function.  That function is a generator that should be called with arguments to the \code{setup} function and returns another function with \code{run} and possibly other member functions.  The member functions can use objects created or passed to \code{setup}.  During internal processing, the NIMBLE compiler turns some cases of \code{nf$var} into \code{nfVar(nf, var)}. These provide direct access to setup variables (member data).  \code{nfVar} is not typically called by a NIMBLE user or programmer.
 #'
 #'
-#' For internal access to methods of \code{nf}, see \link{nfMethod}.
+#' For internal access to methods of \code{nf}, see \code{\link{nfMethod}}.
 #' 
 #' For more information, see \code{?nimbleFunction} and the NIMBLE User Manual.
 #'
@@ -657,23 +794,23 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
 #'        
 #' nf2 <- nfGen2()
 #' nf2$run()
-#' Cnf2 <- compileNimble(nf2)
-#' Cnf2$run()
 nfVar <- function(nf, varName) {
     refClassObj <- nf_getRefClassObject(nf)
     v <- refClassObj[[varName]]
     return(v)
 }
 
+#' @rdname nfVar
+#' @export
 `nfVar<-` <- function(nf, varName, value) {
     refClassObj <- nf_getRefClassObject(nf)
     refClassObj[[varName]] <- value
     return(nf)
 }
 
+#' access (call) a member function of a nimbleFunction
+#' 
 #' Internal function for accessing a member function (method) of a nimbleFunction.  Normally a user will write \code{nf$method(x)} instead of \code{nfMethod(nf, method)(x)}.
-#'
-#' access (call) a member function of a nimbleFunction, including \code{run}.
 #'
 #' @param nf          a specialized nimbleFunction, i.e. one that has already had setup parameters processed
 #' @param methodName  a character string giving the name of the member function to call
@@ -718,12 +855,12 @@ nfMethod <- function(nf, methodName) {
 #' sampInts = NA	#sampled integers will be placed in sampInts
 #' rankSample(weights = c(1, 1, 2), size = 10, sampInts)
 #' sampInts
-#'# [1] 1 1 2 2 2 3 3 3 3 3
+#'# [1] 1 1 2 2 2 2 2 3 3 3
 #' rankSample(weights = c(1, 1, 2), size = 10000, sampInts)
 #' table(sampInts)
 #' #sampInts
 #' #   1    2    3 
-#' #2429 2498 5073 
+#' #2434 2492 5074 
 #'
 #' #Used in a nimbleFunction
 #' sampGen <- nimbleFunction(setup = function(){
@@ -735,9 +872,8 @@ nfMethod <- function(nf, methodName) {
 #' 	return(x)
 #' })
 #' rSamp <- sampGen()
-#' cSamp <- compileNimble(rSamp)
-#' cSamp$run(1:4, 5)
-#' #[1] 1 1 4 4 4
+#' rSamp$run(1:4, 5)
+#' #[1] 3 3 4 4 4
 rankSample <- function(weights, size, output, silent = FALSE) {
     ##cat('in R version rankSample\n')
     if(!is.loaded('rankSample'))
@@ -745,24 +881,167 @@ rankSample <- function(weights, size, output, silent = FALSE) {
     assign(as.character(substitute(output)), .Call('rankSample', as.numeric(weights), as.integer(size), as.integer(output), as.logical(silent)), envir = parent.frame())
 }
 
-#' print function for use in nimbleFunctions, where it is identical to \code{print}, but not R's \code{print}.
+#' print function for use in nimbleFunctions
 #'
-#' print function for use in nimbleFunctions, where it is identical to \code{print}.  Works in R or NIMBLE, not quite identically.
+#' @param ...  an abitrary set of arguments that will be printed in sequence.
 #'
-#' @param ...  an abitrary set of arguments that will be printed in sequence
-#'
-#' @details The keyword \code{print} in nimbleFunction run-time code will be automatically turned into \code{nimPrint}.  This is a function that prints its arguments int order using \code{cat} in R, or using \code{std::cout} in C++ code generated from compiling nimbleFunctions.
+#' @details The keyword \code{print} in nimbleFunction run-time code will be automatically turned into \code{nimPrint}.  This is a function that prints its arguments in order using \code{cat} in R, or using \code{std::cout} in C++ code generated by compiling nimbleFunctions.
 #' Non-scalar numeric objects can be included, although their output will be formatted slightly different in uncompiled and compiled nimbleFunctions.
-#'
 #'
 #' @examples
 #' ans <- matrix(1:4, nrow = 2) ## R code, not NIMBLE code
-#' nimPrint('Answer is ', ans, '\n') ## would work in R or NIMBLE
+#' nimPrint('Answer is ', ans) ## would work in R or NIMBLE
+#'
+#' @seealso \code{\link{cat}}
+#' @export
 nimPrint <- function(...) {
     items <- list(...)
     for(i in seq_along(items)) {if(is.array(items[[i]])) print(items[[i]]) else cat(items[[i]])}
     cat('\n')
 }
+
+#' cat function for use in nimbleFunctions
+#'
+#' @param ...  an arbitrary set of arguments that will be printed in sequence.
+#'
+#' @details
+#'
+#' \code{cat} in nimbleFunction run-code imitates the R function \code{\link{cat}}.  It prints its arguments in order.  No newline is inserted, so include \code{"\n"} if one is desired.
+#'
+#' When an uncompiled nimbleFunction is executed, R's \code{cat} is used.  In a compiled nimbleFunction, a C++ output stream is used that will generally format output similarly to R's \code{cat}. Non-scalar numeric objects can be included, although their output will be formatted slightly different in uncompiled and compiled nimbleFunctions.
+#'
+#' In nimbleFunction run-time code, \code{cat} is identical to \code{print} except the latter appends a newline at the end.
+#'
+#' \code{nimCat} is the same as \code{cat}, and the latter is converted to the former when a nimbleFunction is defined.
+#'
+#' @examples
+#' ans <- matrix(1:4, nrow = 2) ## R code, not NIMBLE code
+#' nimCat('Answer is ', ans) ## would work in R or NIMBLE
+#'
+#' @seealso \code{\link{print}}
+#' @export
+nimCat <- function(...) {
+    items <- list(...)
+    for(i in seq_along(items)) {if(is.array(items[[i]])) print(items[[i]]) else cat(items[[i]])}
+}
+
+
+#' Creates a numeric vector for use in NIMBLE DSL functions
+#'
+#' In a \code{nimbleFunction}, \code{numeric} is identical to \code{nimNumeric}
+#'
+#' See the User Manual for usage examples.
+#'
+#' @param length the length of the vector (default = 0)
+#' @param value the initial value for each element of the vector (default = 0)
+#' @param init logical, whether to initialize elements of the vector (default = TRUE)
+#'
+#' @details
+#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{numeric} is a synonym for \code{nimNumeric}.  When used with only the \code{length} argument, this behaves similarly to R's \code{integer} function.  NIMBLE provides additional arguments to control the initialization value and whether or not initialization will occur.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
+#' 
+#' @author Daniel Turek
+#' @aliases numeric
+#' @seealso \code{\link{integer}} \code{\link{matrix}} \code{\link{array}}
+#' @export
+nimNumeric <- function(length = 0, value = 0, init = TRUE) {
+    fillValue <- makeFillValue(value, 'double', init)
+    rep(fillValue, length)
+}
+
+
+#' Creates an integer vector for use in NIMBLE DSL functions
+#'
+#' In a \code{nimbleFunction}, \code{integer} is identical to \code{nimInteger}
+#'
+#' See the User Manual for usage examples.
+#'
+#' @param length the length of the vector (default = 0)
+#' @param value the initial value for each element of the vector (default = 0L).  Only used if \code{init} is \code{TRUE}.
+#' @param init logical, whether to initialize elements of the vector (default = TRUE).
+#'
+#' @details
+#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{integer} is a synonym for \code{nimInteger}.  When used with only the \code{length} argument, this behaves similarly to R's \code{integer} function.  NIMBLE provides additional arguments to control the initialization value and whether or not initialization will occur.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
+#' 
+#' @author Daniel Turek
+#' @aliases integer
+#' @seealso \code{\link{numeric}} \code{\link{matrix}} \code{\link{array}}
+#' @export
+nimInteger <- function(length = 0, value = 0, init = TRUE) {
+    fillValue <- makeFillValue(value, 'integer', init)
+    rep(fillValue, length)
+}
+
+
+#' Creates a matrix object for use in NIMBLE DSL functions
+#' 
+#' In a \code{nimbleFunction}, \code{matrix} is identical to \code{nimMatrix}
+#'
+#' See the User Manual for usage examples.
+#'
+#' @param value the initial value for each element of the matrix (default = 0)
+#' @param nrow the number of rows in the matrix (default = 1)
+#' @param ncol the number of columns in the matrix (default = 1)
+#' @param init logical, whether to initialize elements of the matrix (default = TRUE)
+#' @param type character representing the data type, i.e. 'double' or 'integer' (default = 'double')
+#'
+#' @details
+#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{matrix} is a synonym for \code{nimMatrix}.  When used with only the first three arguments, this behaves similarly to R's \code{matrix} function.  NIMBLE provides additional arguments to control the initialization value, whether or not initialization will occur, and the type of scalar elements.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
+#' @author Daniel Turek
+#' @aliases matrix
+#' @seealso \code{\link{numeric}} \code{\link{integer}} \code{\link{array}}
+#' @export
+nimMatrix <- function(value = 0, nrow = NA, ncol = NA, init = TRUE, type = 'double') {
+    ## the -1's are used because nimble does not allow both missingness and default value
+    ## but R's matrix function relies on both possibilities
+    fillValue <- makeFillValue(value, type, init)
+    mnrow <- missing(nrow) || is.na(nrow)
+    mncol <- missing(ncol) || is.na(ncol)
+    if(mnrow)
+        if(mncol)
+            base::matrix(fillValue)
+        else
+            base::matrix(fillValue, ncol = ncol)
+    else
+        if(mncol)
+            base::matrix(fillValue, nrow = nrow)
+        else
+            base::matrix(fillValue, nrow = nrow, ncol = ncol)
+}
+
+
+#' Creates a array object of arbitrary dimension for use in NIMBLE DSL functions
+#'
+#' In a \code{nimbleFunction}, \code{array} is identical to \code{nimArray}
+#'
+#' See the User Manual for usage examples.
+#'
+#' @param value the initial value for each element of the array (default = 0)
+#' @param dim a vector specifying the dimensionality and sizes of the array, provided as c(size1, ...) (default = c(1, 1))
+#' @param init logical, whether to initialize elements of the matrix (default = TRUE)
+#' @param type character representing the data type, i.e. 'double' or 'integer' (default = 'double')
+#'
+#' @details
+#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{array} is a synonym for \code{nimArray}.  When used with only the first two arguments, this behaves similarly to R's \code{array} function.  NIMBLE provides additional arguments to control the initialization value, whether or not initialization will occur, and the type of scalar elements.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
+#' 
+#' @author Daniel Turek
+#' @aliases array
+#' @seealso \code{\link{numeric}} \code{\link{integer}} \code{\link{matrix}}
+#' @export
+nimArray <- function(value = 0, dim = c(1, 1), init = TRUE, type = 'double') {
+    fillValue <- makeFillValue(value, type, init)
+    base::array(fillValue, dim)
+}
+
+makeFillValue <- function(value, type, init) {
+    fillValue <- if(init) value else 0
+    fillValueTyped <- switch(type,
+                             double = as.numeric(fillValue),
+                             integer = as.integer(fillValue),
+                             ##logical = as.logical(fillValue),
+                             stop('unknown type argument'))
+    return(fillValueTyped)
+}
+
 
 #' Explicitly declare a variable in run-time code of a nimbleFunction
 #'

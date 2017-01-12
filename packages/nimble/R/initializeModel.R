@@ -1,6 +1,6 @@
 
 
-#' Performs initialization nimble model node values and log probabilities
+#' Performs initialization of nimble model node values and log probabilities
 #'
 #' @param model A setup argument, which specializes an instance of this nimble function to a particular model.
 #' @param silent logical indicating whether to suppress logging information
@@ -27,6 +27,7 @@
 #'       ....
 #'    }
 #' )
+#' @export
 initializeModel <- nimbleFunction(
     setup = function(model, silent = FALSE) {
         initFunctionList <- nimbleFunctionList(nodeInit_virtual)
@@ -37,18 +38,18 @@ initializeModel <- nimbleFunction(
             initFunctionList[[iter]] <- checkRHSonlyInit(model = model, nodes = RHSonlyNodes)
             iter <- iter + 1
         }
-        
+
         stochNonDataNodes <- model$getNodeNames(stochOnly = TRUE, includeData = FALSE)
         for(i in seq_along(stochNonDataNodes))
             initFunctionList[[iter + i - 1]] <- stochNodeInit(model, stochNonDataNodes[i], silent)
 
-        allDetermNodes <- model$getNodeNames(determOnly = TRUE)
-        determNodesNodeFxnVector <- nodeFunctionVector(model = model, nodeNames = allDetermNodes)
+        ##allDetermNodes <- model$getNodeNames(determOnly = TRUE)
+        ##determNodesNodeFxnVector <- nodeFunctionVector(model = model, nodeNames = allDetermNodes)
     },
     
     run = function() {
-        for(i in seq_along(initFunctionList))  {   
-            calculate(nodeFxnVector = determNodesNodeFxnVector)
+        calculate(model)
+        for(i in seq_along(initFunctionList)) {
             initFunctionList[[i]]$run()
         }
         calculate(model)
@@ -63,24 +64,27 @@ checkRHSonlyInit <- nimbleFunction(
     setup = function(model, nodes) {},
     run = function() {
         vals <- values(model, nodes)
-        if(is.na.vec(vals)) print('warning: value of right hand side only node not initialized')
+        if(is.na.vec(vals) | is.nan.vec(vals)) print('warning: value of right hand side only node not initialized')
     },    where = getLoadingNamespace()
 )
 
 stochNodeInit <- nimbleFunction(
     contains = nodeInit_virtual,
-    setup = function(model, node, silent) {},
+    setup = function(model, node, silent) {
+        thisDetermNodes <- model$getDependencies(node, determOnly=TRUE)
+    },
     run = function() {
         theseVals <- values(model, node)
-        if(is.na.vec(theseVals)) simulate(model, node)
+        if(is.na.vec(theseVals) | is.nan.vec(theseVals)) simulate(model, node)
         theseVals <- values(model, node)
-        if(is.na.vec(theseVals)) print('warning: value of stochastic node is NA')
+        if(is.na.vec(theseVals) | is.nan.vec(theseVals)) print('warning: value of stochastic node is NA or NaN')
         lp <- calculate(model, node)
-        if(is.na(lp)) print('warning: problem initializing stochastic node ', node, ', logProb is NA')
-        if(!is.na(lp)) {
+        if(is.na(lp) | is.nan(lp)) print('warning: problem initializing stochastic node ', node, ', logProb is NA or NaN')
+        if(!(is.na(lp) | is.nan(lp))) {
             if(lp < -1e12) {
                 if(!silent) print('warning: problem initializing stochastic node, logProb less than -1e12')
             }
         }
+        model$calculate(thisDetermNodes)
     },    where = getLoadingNamespace()
 )

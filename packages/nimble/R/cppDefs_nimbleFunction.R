@@ -77,10 +77,10 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                                           next
                                                       }
                                                       if(inherits(neededType, 'symbolModelValues')) {
-                                                          thisCppDef <- nimbleProject$getModelValuesCppDef(neededType$mvSpec, NULLok = TRUE)
+                                                          thisCppDef <- nimbleProject$getModelValuesCppDef(neededType$mvConf, NULLok = TRUE)
                                                           if(is.null(thisCppDef)) {
-                                                              thisCppDef <- nimbleProject$needModelValuesCppClass(neededType$mvSpec, fromModel = fromModel)
-                                                              mvClassName <- environment(neededType$mvSpec)$className
+                                                              thisCppDef <- nimbleProject$needModelValuesCppClass(neededType$mvConf, fromModel = fromModel)
+                                                              mvClassName <- environment(neededType$mvConf)$className
                                                               neededTypeDefs[[mvClassName]] <<- thisCppDef
                                                           } else {
                                                               Hincludes <<- c(Hincludes, thisCppDef)
@@ -218,6 +218,15 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                                          else
                                                             SEXPgeneratorFun$name
                                                   Rgenerator <<- buildNimbleFxnInterface(paste0(name,'_refClass') , .self, sym, where = where)
+                                              },
+                                              promoteCallable = function(R_NimbleFxn, asTopLevel = TRUE){
+                                                  ## see comment in nimbleProjectClass::compileNimbleFunction
+                                                  oldCobjectInterface <- nf_getRefClassObject(R_NimbleFxn)$.CobjectInterface
+                                                  if(!is.list(oldCobjectInterface)) return(oldCobjectInterface)
+                                                  existingBasePtr <- oldCobjectInterface[[1]]$getBasePtr(oldCobjectInterface[[2]])
+                                                  thisDll <- oldCobjectInterface[[1]]$dll
+                                                  newCobjectInterface <- Rgenerator(R_NimbleFxn, thisDll, project = nimbleProject, existingBasePtr = existingBasePtr)
+                                                  newCobjectInterface
                                               },
                                               buildCallable = function(R_NimbleFxn, dll = NULL, asTopLevel = TRUE){
                                              ##     cat('buildCallable\n')

@@ -419,20 +419,20 @@ nfProcessing$methods(makeTypeObject = function(name, instances, firstOnly = FALS
                 return(invisible(NULL))
             }
         }
-        ## Generate one set of symbolModelValues objects for the neededTypes, and each of these can have its own mvSpec
+        ## Generate one set of symbolModelValues objects for the neededTypes, and each of these can have its own mvConf
         ## Generate another symbolModelValues to return and have in the symTab for this compilation
-        ## I don't think that mvSpec gets used, since they all get Values *        
+        ## I don't think that mvConf gets used, since they all get Values *        
         for(i in seq_along(instances)) {
             className <- class(instances[[i]][[name]])
             if(!(className %in% names(neededTypes))) {
                 ## these are used only to build neededTypes
-                ntSym <- symbolModelValues(name = name, type = 'Values', mvSpec = instances[[i]][[name]]$mvSpec)
+                ntSym <- symbolModelValues(name = name, type = 'Values', mvConf = instances[[i]][[name]]$mvConf)
                 neededTypes[[className]] <<- ntSym
             }
         }
         ## this is used in the symbol table
         neededObjectNames <<- c(neededObjectNames, name)
-        newSym <- symbolModelValues(name = name, type = 'Values', mvSpec = NULL)
+        newSym <- symbolModelValues(name = name, type = 'Values', mvConf = NULL)
         return(newSym)
     }
     if(inherits(instances[[1]][[name]], 'modelBaseClass')) {
@@ -504,6 +504,9 @@ nfProcessing$methods(makeTypeObject = function(name, instances, firstOnly = FALS
     }
     if(inherits(instances[[1]][[name]], 'getParam_info')) {
         return(symbolGetParamInfo(name = name, paramInfo = instances[[1]][[name]]))
+    }
+    if(inherits(instances[[1]][[name]], 'getBound_info')) {
+        return(symbolGetBoundInfo(name = name, boundInfo = instances[[1]][[name]]))
     }
     ## if(is.character(instances[[1]][[name]])) {
     ##     return(symbolBase(name = name, type = 'Ronly'))
@@ -630,21 +633,8 @@ nfProcessing$methods(processKeywords_all = function(){
 nfProcessing$methods(matchKeywords_all = function(){
 	for(i in seq_along(compileInfos))
             RCfunProcs[[i]]$matchKeywords(.self)
-            ##	compileInfos[[i]]$origRcode <<- matchKeywords_one(compileInfos[[i]]$origRcode)
 })
 
-## singleVarAccessClass <- setRefClass('singleVarAccessClass',
-##                                     fields = list(model = 'ANY', var = 'ANY', useSingleIndex = 'ANY'),
-##                                     methods = list(
-##                                         show = function() {
-##                                             writeLines(paste('singleVarAccess for model',model$name,'to var',var))
-##                                         })
-##                                     )
-## singleVarAccess <- function(model, var, useSingleIndex = FALSE) {
-##     singleVarAccessClass$new(model = model, var = var, useSingleIndex = useSingleIndex)
-## }
-
-# for now export this as R<3.1.2 give warnings if don't
 
 #' Class \code{singleVarAccessClass}
 #' @aliases singleVarAccessClass
@@ -662,24 +652,8 @@ singleVarAccess <- function(model, var, useSingleIndex = FALSE) {
     ans
 }
 
-## singleModelValuesAccessClass <- setRefClass('singleModelValuesAccessClass',
-##                                     fields = list(modelValues = 'ANY', var = 'ANY'),
-##                                     methods = list(
-##                                         show = function() {
-##                                             writeLines(paste('singleModelValuesAccess for model to var',var))
-##                                         })
-##                                     )
-## singleModelValuesAccess <- function(modelValues, var) {
-##     singleModelValuesAccessClass$new(modelValues = modelValues, var = var)
-## }
 
-# for now export this as R<3.1.2 give warnings if don't
-
-#' Class \code{singleModelValuesAccessClass}
-#' @aliases singleModelValuesAccessClass
-#' @export
-#' @description
-#' Classes used internally in NIMBLE and not expected to be called directly by users.
+# singleModelValuesAccessClass and singleModelValuesAccess are exported (and 'documented' in nimble-internals.Rd) based on prep_pkg; doing it here causes R CMD check issues with argument names
 singleModelValuesAccessClass <- setRefClass('singleModelValuesAccessClass',
                                      methods = list(
                                            initialize = function() cat('Oops: building a singleModelValuesAccessClass refClass -- should be defunct\n')

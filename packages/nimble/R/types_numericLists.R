@@ -1,81 +1,83 @@
-NumericListBase <- setRefClass(Class = "NumericListBase")
+## numeric lists are currently not supported
 
-RNumericList <- setRefClass(Class = "RNumericList",
-                            contains = "NumericListBase",
-                            fields = list(listType = "character",
-                                nDim = "numeric", 
-                                Values = "list",
-                                nRow = "numeric"),
-                            methods = list(initialize = function (listType = "double", nDim = 1, nRow = 1){
-                                listType <<- listType
-                                nDim <<- nDim
-                                nRow <<- nRow
-                                Values <<- list()
-                                if(nRow >0)
-                                    for(i in 1:nRow)
-                                        Values[[i]] <<- array(data = 0, dim = rep(1, nDim) )
-                            },
+## NumericListBase <- setRefClass(Class = "NumericListBase")
+
+## RNumericList <- setRefClass(Class = "RNumericList",
+##                             contains = "NumericListBase",
+##                             fields = list(listType = "character",
+##                                 nDim = "numeric", 
+##                                 Values = "list",
+##                                 nRow = "numeric"),
+##                             methods = list(initialize = function (listType = "double", nDim = 1, nRow = 1){
+##                                 listType <<- listType
+##                                 nDim <<- nDim
+##                                 nRow <<- nRow
+##                                 Values <<- list()
+##                                 if(nRow >0)
+##                                     for(i in 1:nRow)
+##                                         Values[[i]] <<- array(data = 0, dim = rep(1, nDim) )
+##                             },
                                 
-                                show = function(){
-                                    writeLines("R-Based Numeric List")
-                                    cat("Number of Dimensions = ", nDim, "Data Type = ", listType, "\nNumber of Rows = ", nRow, "\n" )
-                                },
-                                resize = function(rows){
-                                    if(nRow == rows)
-                                        break
-                                    else if(nRow > rows){
-                                        Values <<- numList$Values[1:rows]
-                                        nRow <<- rows
-                                    }
-                                    else if(nRow < rows){
-                                        ndims = nDim
-                                        for(i in (nRow+1):rows)
-                                            Values[[i]] <<- array(0, dim = rep(1, ndims))
-                                        nRow <<- rows
-                                    }
-                                },
-                                getSize = function(){
-                                    return(nRow)
-                                }
-                                )
+##                                 show = function(){
+##                                     writeLines("R-Based Numeric List")
+##                                     cat("Number of Dimensions = ", nDim, "Data Type = ", listType, "\nNumber of Rows = ", nRow, "\n" )
+##                                 },
+##                                 resize = function(rows){
+##                                     if(nRow == rows)
+##                                         break
+##                                     else if(nRow > rows){
+##                                         Values <<- numList$Values[1:rows]
+##                                         nRow <<- rows
+##                                     }
+##                                     else if(nRow < rows){
+##                                         ndims = nDim
+##                                         for(i in (nRow+1):rows)
+##                                             Values[[i]] <<- array(0, dim = rep(1, ndims))
+##                                         nRow <<- rows
+##                                     }
+##                                 },
+##                                 getSize = function(){
+##                                     return(nRow)
+##                                 }
+##                                 )
                             
-                            )
+##                             )
 
-setMethod('[[', 'RNumericList',
-          function(x, i)
-          return(x$Values[[i]])
-          )
+## setMethod('[[', 'RNumericList',
+##           function(x, i)
+##           return(x$Values[[i]])
+##           )
 
-setMethod('[[<-', 'RNumericList',
-          function(x, i, value) 
-          {
-              if(i > x$nRow)
-                  stop("Index is higher than max row of numericList")
-              rowDims <- dimOrLength(x[[i]])
-              inputDims <- dimOrLength(value)
-              if(length(rowDims) != length(inputDims) )
-                  stop("Incorrect number of dimensions for numericList")
-              if(any(rowDims != inputDims) ) 
-                  stop("Dimensions of row incorrect. Try resizing row first")
-              x$Values[[i]] <- value
-              return(x)
-          })
+## setMethod('[[<-', 'RNumericList',
+##           function(x, i, value) 
+##           {
+##               if(i > x$nRow)
+##                   stop("Index is higher than max row of numericList")
+##               rowDims <- nimbleInternalFunctions$dimOrLength(x[[i]])
+##               inputDims <- nimbleInternalFunctions$dimOrLength(value)
+##               if(length(rowDims) != length(inputDims) )
+##                   stop("Incorrect number of dimensions for numericList")
+##               if(any(rowDims != inputDims) ) 
+##                   stop("Dimensions of row incorrect. Try resizing row first")
+##               x$Values[[i]] <- value
+##               return(x)
+##           })
 				
-numericList <- function(type = double(2), length = 1, buildType = 'R', extPtr = NA){
-    typeSub <- substitute(type)
-    if(as.character(typeSub[[1]]) == "double")
-        type = "double"
-    else if(as.character(typeSub[[1]]) == "integer")
-        type = "int"
-    else 
-        stop("Specified type not currently supported")
-    nDim = typeSub[[2]]
-    if(buildType == 'R')
-        return(RNumericList(listType = type, nDim = nDim, nRow = length))
-    if(inherits(extPtr, 'externalptr') ) 
-        return(CNumericList(extPtr = extPtr))
-    return(CNumericList( extPtr = .Call('makeNumericList',  as.integer(nDim), type, as.integer(length) ) ) )
-}
+## numericList <- function(type = double(2), length = 1, buildType = 'R', extPtr = NA){
+##     typeSub <- substitute(type)
+##     if(as.character(typeSub[[1]]) == "double")
+##         type = "double"
+##     else if(as.character(typeSub[[1]]) == "integer")
+##         type = "int"
+##     else 
+##         stop("Specified type not currently supported")
+##     nDim = typeSub[[2]]
+##     if(buildType == 'R')
+##         return(RNumericList(listType = type, nDim = nDim, nRow = length))
+##     if(inherits(extPtr, 'externalptr') ) 
+##         return(CNumericList(extPtr = extPtr))
+##     return(CNumericList( extPtr = .Call('makeNumericList',  as.integer(nDim), type, as.integer(length) ) ) )
+## }
 
 #' set the size of a numeric variable in NIMBLE
 #'
@@ -95,22 +97,6 @@ setSize <- function(numObj, ..., row){
     thisCall <- as.list(match.call()[-1])
     if(length(thisCall) < 2) stop("No information provided to setSize")
     newDims <- unlist(list(...))
-    ## newDims <- if("row" %in% names(thisCall)) {
-    ##     ## this case is currently never used. 7/31/15.
-    ##     ## if it comes back into use, we would need to include eval()s, but it is moot due to using list(...) above
-    ##     if(length(thisCall) < 3) stop("Insufficient information provided to setSize")
-    ##     as.numeric(thisCall[2:(length(thisCall) - 1)])
-    ## } else {
-    ##     ## change made by DT to fix R execution of MCMC sampling in July 2015.
-    ##     ## I think this code (R function setSize) is still probably buggy,
-    ##     ## and should be reviewed in great detail.
-    ##     ## 7/31/15: DT's fix wasn't right, all moot by use list(...)
-    ##     ##as.numeric(thisCall[-1]) ## this was the buggy cod
-    ##     ##as.numeric(eval(thisCall[[-1]], envir = parent.frame())) ## this was DT's fix but it assumes the ... is one argument giving a vector of sizes.
-    ##     ## It should instead handle multiple ... args, each giving a scalar size for one dimension
-    ## next line is correct but moot by using list(...) above
-    ##     as.numeric(unlist(lapply(thisCall[-1], eval, envir = parent.frame())))
-    ## }
     if(any(is.na(newDims))) warning("Not sure what to do with NA dims in setSize")
     if(is.numeric(numObj)) {
         oldDims <- nimDim(numObj)
@@ -148,65 +134,67 @@ setSize <- function(numObj, ..., row){
         jnk <- .Call("resizeNumListRow", numObj$valuesPtr, as.integer(row), as.integer(dims) )
 }
 
-CNumericList <- setRefClass(Class = "CNumericList",
-                            contains = "NumericListBase",
-                            fields = list(listType = "character",
-                                valuesPtr = "ANY", 
-                                nRow = function(x)
-                                {
-                                    if(missing(x))
-                                        getCRows(valuesPtr)
-                                    else
-                                        writeLines("Need to set nRow using setRows function")
-                                }
-                                ),
-                            methods = list(initialize = function (extPtr){
-                                valuesPtr <<- extPtr
-                                
-                            },
-                                
-                                show = function(){
-                                    writeLines("C-Based Numeric List")
-                                        #				cat("Number of Dimensions = ", nDim, "Data Type = ", listType, "\nNumber of Rows = ", getCRows(valuesPtr), "\n" )
-                                }
-                                
-                                
-                                ,
-                                resize = function(rows){
-                                    jnk <- .Call("setNumListRows", valuesPtr, as.integer(rows), FALSE ) 
-                                },
-                                getSize = function()
-                                getCRows(valuesPtr)
-                                )
-                            )
+## numeric lists are currently not supported
 
-setMethod('[[', 'CNumericList', 
-          function(x, i){
-              if(i < 0 | i > x$nRow)
-                  stop("Invalid index for this numericList")
-              getCNumericListValue(x$valuesPtr, i)
-          }
-          )
+## CNumericList <- setRefClass(Class = "CNumericList",
+##                             contains = "NumericListBase",
+##                             fields = list(listType = "character",
+##                                 valuesPtr = "ANY", 
+##                                 nRow = function(x)
+##                                 {
+##                                     if(missing(x))
+##                                         getCRows(valuesPtr)
+##                                     else
+##                                         writeLines("Need to set nRow using setRows function")
+##                                 }
+##                                 ),
+##                             methods = list(initialize = function (extPtr){
+##                                 valuesPtr <<- extPtr
+                                
+##                             },
+                                
+##                                 show = function(){
+##                                     writeLines("C-Based Numeric List")
+##                                         #				cat("Number of Dimensions = ", nDim, "Data Type = ", listType, "\nNumber of Rows = ", getCRows(valuesPtr), "\n" )
+##                                 }
+                                
+                                
+##                                 ,
+##                                 resize = function(rows){
+##                                     jnk <- .Call("setNumListRows", valuesPtr, as.integer(rows), FALSE ) 
+##                                 },
+##                                 getSize = function()
+##                                 getCRows(valuesPtr)
+##                                 )
+##                             )
+
+## setMethod('[[', 'CNumericList', 
+##           function(x, i){
+##               if(i < 0 | i > x$nRow)
+##                   stop("Invalid index for this numericList")
+##               getCNumericListValue(x$valuesPtr, i)
+##           }
+##           )
 		
-setMethod('[[<-', 'CNumericList',
-          function(x, i, value){
-              if(i < 0 | i > x$nRow)
-                  stop("Invaid index for this numericList")
-              setCNumericListValue(x$valuesPtr, value, i)
-              return(x)
-          }
-          )
+## setMethod('[[<-', 'CNumericList',
+##           function(x, i, value){
+##               if(i < 0 | i > x$nRow)
+##                   stop("Invaid index for this numericList")
+##               setCNumericListValue(x$valuesPtr, value, i)
+##               return(x)
+##           }
+##           )
 
 	
-makeCNumericListPtr <- function(nDims = 1, type = "double", nRows = 1)
-	.Call("makeNumericList", as.integer(nDims), as.character(type), as.integer(nRows))
+## makeCNumericListPtr <- function(nDims = 1, type = "double", nRows = 1)
+## 	.Call("makeNumericList", as.integer(nDims), as.character(type), as.integer(nRows))
 	
-setCNumericListValue <- function(listPtr, values, row)
-	jnk <- .Call("setMVElement", listPtr, as.integer(row) , values ) 
+## setCNumericListValue <- function(listPtr, values, row)
+## 	jnk <- .Call("setMVElement", listPtr, as.integer(row) , values ) 
 	
-getCNumericListValue <- function(list, row)
-	.Call("getMVElement", list, as.integer(row))	
+## getCNumericListValue <- function(list, row)
+## 	.Call("getMVElement", list, as.integer(row))	
 	
-getCRows = function(list)
-	.Call("getNRow", list)
+## getCRows = function(list, dll)
+## 	.Call(getNativeSymbolInfo("getNRow", dll), list)
 	
