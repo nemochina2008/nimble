@@ -56,9 +56,8 @@ makeTypeTemplateFunction = function(newName, .self) {
 
     ## use typedefs to change nimble's general typedefs for Eigen locally
     typeDefs <- symbolTable()
-    typeDefs$addSymbol(cppVarFull(baseType = "typedef typename EigenTemplateTypes<TYPE_>::typeEigenMapStr", name = "EigenMapStr") ) ## these coerces the cppVar system to generate a line of typedef code for us
+    typeDefs$addSymbol(cppVarFull(baseType = "typedef typename EigenTemplateTypes<TYPE_>::typeEigenMapStrd", name = "EigenMapStrd") ) ## these coerces the cppVar system to generate a line of typedef code for us
     typeDefs$addSymbol(cppVarFull(baseType = "typedef typename EigenTemplateTypes<TYPE_>::typeMatrixXd", name = "MatrixXd") )
-    
     
     newCppFunDef$name <- newName
     newCppFunDef$template <- cppVarFull(name = character(), baseType = 'template', templateArgs = list('class TYPE_'))
@@ -252,13 +251,13 @@ makeADtapingFunction <- function(newFunName = 'callForADtaping', targetFunDef, A
     CFT
 }
 
-makeStaticInitClass <- function() {
+makeStaticInitClass <- function(cppDef) {
     cppClass <- cppClassDef(name = 'initTest', useGenerator = FALSE)
     globalsDef <- cppGlobalObjects(name = 'initTestGlobals')
     globalsDef$objectDefs[['staticInitClassObject']] <- cppVarFull(baseType = 'initTest', name = 'initTestObject_')
     
     initializerDef <- cppFunctionDef(name = 'initTest', returnType = emptyTypeInfo())
-    initializerCode <- quote(a)
+    initializerCode <- substitute(push_back(CLASSNAME::allADtapePtrs_, CLASSNAME::callForADtaping() ),  list(CLASSNAME = as.name(cppDef$name) ))
     initializerDef$code <- cppCodeBlock(code = initializerCode, objectDefs = list())
     cppClass$functionDefs[['initializer']] <- initializerDef
     cppClass$globalObjectsDefs[['globals']] <- globalsDef

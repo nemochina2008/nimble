@@ -52,7 +52,7 @@ MatrixXd EIGEN_SOLVE(const MatrixBase<derived1> &x, const MatrixBase<derived2> &
 template <typename Type>
 struct EigenTemplateTypes {
   typedef Matrix<Type, Dynamic, Dynamic> typeMatrixXd;
-  typedef Map<typeMatrixXd, Unaligned, EigStrDyn > typeEigenMapStr;
+  typedef Map<typeMatrixXd, Unaligned, EigStrDyn > typeEigenMapStrd;
 };
 
 template <typename Derived1, typename Derived2>

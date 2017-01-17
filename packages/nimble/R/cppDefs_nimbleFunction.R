@@ -189,7 +189,7 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                                   invisible(NULL)
                                               },
                                               addStaticInitClass = function( funName ) {
-                                                  neededTypeDefs[['staticInitClass']] <<- makeStaticInitClass() ##
+                                                  neededTypeDefs[['staticInitClass']] <<- makeStaticInitClass(.self) ##
                                                   invisible(NULL)
                                               },
                                               addADclassContent = function() {
