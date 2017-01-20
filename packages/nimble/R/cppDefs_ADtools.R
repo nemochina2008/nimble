@@ -258,10 +258,23 @@ makeStaticInitClass <- function(cppDef) {
     
     initializerDef <- cppFunctionDef(name = 'initTest', returnType = emptyTypeInfo())
     initializerCode <- substitute(push_back(CLASSNAME::allADtapePtrs_, CLASSNAME::callForADtaping() ),  list(CLASSNAME = as.name(cppDef$name) ))
-    initializerDef$code <- cppCodeBlock(code = initializerCode, objectDefs = list())
+    initializerCode <- do.call('call', list('{', initializerCode), quote = TRUE)
+    initializerECcode <- RparseTree2ExprClasses(initializerCode)
+    initializerDef$code <- cppCodeBlock(code = initializerECcode, objectDefs = symbolTable())
     cppClass$functionDefs[['initializer']] <- initializerDef
     cppClass$globalObjectsDefs[['globals']] <- globalsDef
     cppClass
+}
+
+makeArgumentTransferFunction <- function(newFunName = 'arguments2cppad', targetFunDef, ADfunName, independentVarNames) {
+    TF <- RCfunctionDef$new() ## should it be static?
+    TF$returnType <- cppVarFull(baseType = 'nimbleUseCppClass', reference = TRUE, name = 'RETURN_OBJ')
+    TF$name <- newFunName
+
+    TF$args <- symbolTable() ## should be same as regular function
+
+    
+    
 }
 
 ## makeStaticRecordAllTapesFunction <- function() {

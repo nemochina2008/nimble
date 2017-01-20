@@ -145,14 +145,19 @@ cppProjectClass <- setRefClass('cppProjectClass',
                                        CPPincludes <- CPPincludes[ CPPincludes != selfCPP ]
 
                                        ## Eigen must be included before any R header files because they both define "length"
+                                       ## similar for cppad
                                        iEigenInclude <- grep("EigenTypedefs", CPPincludes)
                                        if(length(iEigenInclude) > 0) {
                                            CPPincludes <- c(CPPincludes[iEigenInclude], CPPincludes[-iEigenInclude])
                                        }
+                                       iCppInclude <- grep("cppad", CPPincludes)
+                                       if(length(iCppInclude) > 0) {
+                                           CPPincludes <- c(CPPincludes[iCppInclude], CPPincludes[-iCppInclude])
+                                       }
 
                                        ## at this point strip out CPPincludes other than EigenTypedefs that have .cpp and gsub .cpp to .o
                                        boolConvertCppIncludeToOinclude <- grepl("\\.cpp", CPPincludes)
-                                       if(length(iEigenInclude) > 0) boolConvertCppIncludeToOinclude[1] <- FALSE
+                                       ##if(length(iEigenInclude) > 0) boolConvertCppIncludeToOinclude[1] <- FALSE
                                        Oincludes <<- gsub("\\.cpp", ".o", CPPincludes[boolConvertCppIncludeToOinclude])
                                        CPPincludes <- CPPincludes[!boolConvertCppIncludeToOinclude]
 

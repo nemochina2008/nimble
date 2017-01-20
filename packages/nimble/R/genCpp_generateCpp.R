@@ -19,6 +19,7 @@ cppOutputCalls <- c(makeCallList(binaryMidOperators, 'cppOutputMidOperator'),
                         MAKE_FIXED_VECTOR = 'cppOutputMakeFixedVector',
                         concatenateTemp = 'cppOutputEigBlank',
                         ':' = 'cppOutputColon',
+                        '::' = 'cppOutputMidOperator',
                         size = 'cppOutputSize',
                          'for' = 'cppOutputFor',
                          'if' = 'cppOutputIfWhile',
@@ -58,6 +59,7 @@ cppOutputCalls <- c(makeCallList(binaryMidOperators, 'cppOutputMidOperator'),
                     )
 cppOutputCalls[['pow']] <-  'cppOutputPow'
 cppMidOperators <- midOperators
+cppMidOperators[['::']] <- '::'
 cppMidOperators[['%*%']] <- ' * '
 cppMidOperators[['cppMemberDereference']] <- '->'
 cppMidOperators[['nfVar']] <- '->'
