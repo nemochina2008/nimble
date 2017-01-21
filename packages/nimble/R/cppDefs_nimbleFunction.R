@@ -182,11 +182,17 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                               addADtapingFunction = function( funName, independentVarNames, dependentVarNames ) {
                                                   ADfunName <- if(funName == 'operator()') 'run_AD_' else paste0(funName, '_AD_')
                                                   regularFun <- RCfunDefs[[funName]]
+                                                  ##                  newFunName <- if(funName == 'operator()') 'run_callForADtaping_' else paste0(funName, '_callForADtaping_')
                                                   newFunName <- 'callForADtaping'
                                                   functionDefs[[newFunName]] <<- makeADtapingFunction(newFunName, regularFun, ADfunName, independentVarNames, dependentVarNames)
                                                   CPPincludes <<- c("<cppad/cppad.hpp>", CPPincludes)
-                                                  Hincludes <<- c("<cppad/cppad.hpp>", Hincludes)
+                                                  Hincludes <<- c("<cppad/cppad.hpp>", nimbleIncludeFile("nimbleCppAD.h"), Hincludes)
                                                   invisible(NULL)
+                                              },
+                                              addADargumentTransferFunction = function( funName, independentVarNames ) {
+                                                  newFunName <- 'ADargumentTransfer'
+                                                  regularFun <- RCfunDefs[[funName]]
+                                                  functionDefs[[newFunName]] <<- makeADargumentTransferFunction(newFunName, regularFun, independentVarNames)
                                               },
                                               addStaticInitClass = function( funName ) {
                                                   neededTypeDefs[['staticInitClass']] <<- makeStaticInitClass(.self) ##
@@ -194,8 +200,10 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                               },
                                               addADclassContent = function() {
                                                   cppClass$objectDefs$addSymbol(cppVarFull(name = 'allADtapePtrs_', static = TRUE, baseType = 'vector', templateArgs = list(cppVarFull(baseType = 'CppAD::ADFun', templateArgs = list('double'), ptr = 1))))
+                                                  cppClass$objectDefs$addSymbol(cppVarFull(name = 'ADtapeSetup', baseType = 'nimbleCppADinfoClass'))
                                                   addTypeTemplateFunction('operator()')
                                                   addADtapingFunction('operator()', independentVarNames = c('ARG1_x_','ARG2_z_'), dependentVarNames = 'ANS_' )
+                                                  addADargumentTransferFunction('operator()', independentVarNames = c('ARG1_x_','ARG2_z_'))
                                                   addStaticInitClass()
                                                   ## static declaration in the class definition
                                                   objectDefs[['vectorADtapePtrs']] <<- cppVarFull(baseType = 'vector', templateArgs = list(cppVarFull(baseType = 'CppAD::ADFun', templateArgs = list('double'), ptr = 1)), static = TRUE, name = 'allADtapePtrs_')

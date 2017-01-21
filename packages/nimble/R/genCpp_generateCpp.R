@@ -15,6 +15,7 @@ cppOutputCalls <- c(makeCallList(binaryMidOperators, 'cppOutputMidOperator'),
                     makeCallList(c('startNimbleTimer','endNimbleTimer','push_back'), 'cppOutputMemberFunction'),
                     makeCallList(c('nimSeqBy','nimSeqLen'), 'cppOutputCallAsIs'),
                     list(
+                        memberData = 'cppOutputMemberData',
                         fill = 'cppOutputEigMemberFunctionNoTranslate',
                         MAKE_FIXED_VECTOR = 'cppOutputMakeFixedVector',
                         concatenateTemp = 'cppOutputEigBlank',
@@ -271,6 +272,10 @@ cppOutputEigenMapAssign <- function(code, symTab) {
 cppOutputSize <- function(code, symTab) {
     ## Windows compiler will give warnings if something.size(), which returns unsigned int, is compared to an int.  Since R has no unsigned int, we cast .size() to int.
     paste0('static_cast<int>(', nimGenerateCpp(code$args[[1]], symTab), '.size())')
+}
+
+cppOutputMemberData <- function(code, symTab) {
+    paste0( nimGenerateCpp(code$args[[1]], symTab), '.', code$args[[2]]$name)
 }
 
 cppOutputMemberFunction <- function(code, symTab) {

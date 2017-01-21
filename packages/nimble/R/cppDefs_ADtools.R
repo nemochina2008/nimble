@@ -266,15 +266,49 @@ makeStaticInitClass <- function(cppDef) {
     cppClass
 }
 
-makeArgumentTransferFunction <- function(newFunName = 'arguments2cppad', targetFunDef, ADfunName, independentVarNames) {
+makeADargumentTransferFunction <- function(newFunName = 'arguments2cppad', targetFunDef, independentVarNames) {
+    ## modeled closely parts of /*  */
     TF <- RCfunctionDef$new() ## should it be static?
-    TF$returnType <- cppVarFull(baseType = 'nimbleUseCppClass', reference = TRUE, name = 'RETURN_OBJ')
+    TF$returnType <- cppVarFull(baseType = 'nimbleCppADinfoClass', ref = TRUE, name = 'RETURN_OBJ')
     TF$name <- newFunName
+    localVars <- symbolTable()
+    TF$args <- targetFunDef$args
 
-    TF$args <- symbolTable() ## should be same as regular function
-
+    ## set up index vars (up to 6)
+    indexVarNames <- paste0(letters[9:14],'_')
+    for(ivn in indexVarNames)
+        localVars$addSymbol( cppVar(name = ivn, baseType = 'int') )    
     
+    nimbleSymTab <- targetFunDef$RCfunProc$compileInfo$newLocalSymTab
+    ## create code to copy from arguments into the independentVars
+    numIndependentVars <- length(independentVarNames)
+    copyIntoIndepVarCode <- vector('list', numIndependentVars+1)
+    ## create the netIncrement_ variable and code to initialize it to 1
+    localVars$addSymbol( cppVar(name = 'netIncrement_', baseType = 'int') )
+    copyIntoIndepVarCode[[1]] <- quote(netIncrement_ <- 1) 
+    totalIndependentLength <- 0
+    for(ivn in seq_along(independentVarNames)) {
+        thisName <- independentVarNames[ivn]
+        thisSym <- nimbleSymTab$getSymbolObject(thisName)
+        if(thisSym$nDim > 0) {
+            thisSizes <- thisSym$size
+            sizeList <- lapply(thisSizes, function(x) c(1, x))
+            names(sizeList) <- indexVarNames[1:length(sizeList)]
+            newRcode <- makeCopyingCodeBlock(quote(memberData(ADtapeSetup, ADindependentVars)), as.name(thisName), sizeList, indicesRHS = FALSE, incrementIndex = quote(netIncrement_))
+            copyIntoIndepVarCode[[ivn+1]] <- newRcode 
+            totalIndependentLength <- totalIndependentLength + prod(thisSizes)
+        } else {
+            copyIntoIndepVarCode[[ivn+1]] <- substitute({memberData(ADtapeSetup, ADindependentVars)[netIncrement_] <- RHS; netIncrement_ <- netIncrement_ + 1}, list(RHS = as.name(thisName))) 
+            totalIndependentLength <- totalIndependentLength + 1
+        }
+    }
+    setSizeLine <- substitute(cppMemberFunction(resize(memberData(ADtapeSetup, ADindependentVars), TIL)), list(TIL = totalIndependentLength))
+    returnCall <- cppLiteral("return(ADtapeSetup)")
     
+    allRcode <- do.call('call', c(list('{'), list(setSizeLine), copyIntoIndepVarCode, list(returnCall)), quote=TRUE)
+    allCode <- RparseTree2ExprClasses(allRcode)
+    TF$code <- cppCodeBlock(code = allCode, objectDefs = localVars)
+    TF
 }
 
 ## makeStaticRecordAllTapesFunction <- function() {
