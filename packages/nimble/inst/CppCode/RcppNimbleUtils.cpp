@@ -65,6 +65,13 @@ double t(double x) {return(x);}
 int prod(int x) {return(x);}
 double prod(double x) {return(x);}
 
+NimArr<1, double> vectorDouble_2_NimArr(vector<double> &input) {
+  NimArr<1, double> output;
+  output.setSize(input.size(), false, false);
+  std::copy(input.begin(), input.end(), output.getPtr());
+  return(output);
+}
+
 template<>
 void SEXP_2_NimArr<1>(SEXP Sn, NimArr<1, double> &ans) {
   if(!(isNumeric(Sn) || isLogical(Sn))) PRINTF("Error: SEXP_2_NimArr<1> called for SEXP that is not a numeric or logical!\n");

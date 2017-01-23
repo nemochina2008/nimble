@@ -266,8 +266,26 @@ makeStaticInitClass <- function(cppDef) {
     cppClass
 }
 
+makeGradientFunction <- function(newFunName = 'run_gradient_', regularFun, argumentTransferName, independentVarNames) {
+    GF <- RCfunctionDef()
+    GF$name <- newFunName
+    GF$args <- regularFun$args
+    browser()
+    GF$returnType <- symbolBasic(name = 'NAME_NOT_USED', type = 'double', nDim = 1, size = as.numeric(NA))$genCppVar()## could check that this is double: regularFun$returnType
+    localVars <- symbolTable()
+    argTransferCall <- substitute(FOO(), list(FOO = as.name(argumentTransferName)))
+    for(i in seq_along(independentVarNames)) argTransferCall[[i + 1]] <- as.name(independentVarNames[[i]])
+    oneLinerCode <- substitute(return(vectorDouble_2_NimArr(getJacobian(ATC))),  list(ATC = argTransferCall))
+    allRcode <- do.call('call', c(list('{'), list(oneLinerCode)), quote=TRUE)
+
+    allCode <- RparseTree2ExprClasses(allRcode)
+    GF$code <- cppCodeBlock(code = allCode, objectDefs = localVars)
+    GF
+}
+
 makeADargumentTransferFunction <- function(newFunName = 'arguments2cppad', targetFunDef, independentVarNames) {
     ## modeled closely parts of /*  */
+    ## needs to set the ADtapePtr to one element of the ADtape
     TF <- RCfunctionDef$new() ## should it be static?
     TF$returnType <- cppVarFull(baseType = 'nimbleCppADinfoClass', ref = TRUE, name = 'RETURN_OBJ')
     TF$name <- newFunName

@@ -1,5 +1,9 @@
 #ifndef __ADtypes
 #define __ADtypes
+/* THIS WAS A DRAFT OF CONCEPTS THAT IS NOT USED.  
+   I AM LEAVING IT FOR NOW BUT IT SHOULD BE CLEANED UP UNLESS 
+   IT TURNS OUT TO BE USEFUL.  */
+
 // this shuold be included before EigenTypesDefs or R.h
 #include <cppad/cppad.hpp> // need to get a path into Makevars for this
 
