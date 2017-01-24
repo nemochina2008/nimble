@@ -275,6 +275,8 @@ cppProjectClass <- setRefClass('cppProjectClass',
                                        setwd(dirName)
                                        on.exit(setwd(cur))
 
+                                       browser()
+
                                        if(is.null(nimbleUserNamespace$sessionSpecificDll)) compileDynamicRegistrations(showCompilerOutput = showCompilerOutput)
 
                                        if(!showCompilerOutput) { 

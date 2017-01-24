@@ -298,6 +298,10 @@ makeADargumentTransferFunction <- function(newFunName = 'arguments2cppad', targe
         localVars$addSymbol( cppVar(name = ivn, baseType = 'int') )    
     
     nimbleSymTab <- targetFunDef$RCfunProc$compileInfo$newLocalSymTab
+
+    ## assign tape ptr code
+    assignTapePtrCode <- quote(memberData(ADtapeSetup, ADtape) <- allADtapePtrs_[1]) ## This will have to become a unique index in general. -1 added during output
+    
     ## create code to copy from arguments into the independentVars
     numIndependentVars <- length(independentVarNames)
     copyIntoIndepVarCode <- vector('list', numIndependentVars+1)
@@ -312,7 +316,7 @@ makeADargumentTransferFunction <- function(newFunName = 'arguments2cppad', targe
             thisSizes <- thisSym$size
             sizeList <- lapply(thisSizes, function(x) c(1, x))
             names(sizeList) <- indexVarNames[1:length(sizeList)]
-            newRcode <- makeCopyingCodeBlock(quote(memberData(ADtapeSetup, independentVars)), as.name(thisName), sizeList, indicesRHS = FALSE, incrementIndex = quote(netIncrement_))
+            newRcode <- makeCopyingCodeBlock(quote(memberData(ADtapeSetup, independentVars)), as.name(thisName), sizeList, indicesRHS = TRUE, incrementIndex = quote(netIncrement_))
             copyIntoIndepVarCode[[ivn+1]] <- newRcode 
             totalIndependentLength <- totalIndependentLength + prod(thisSizes)
         } else {
@@ -323,7 +327,7 @@ makeADargumentTransferFunction <- function(newFunName = 'arguments2cppad', targe
     setSizeLine <- substitute(cppMemberFunction(resize(memberData(ADtapeSetup, independentVars), TIL)), list(TIL = totalIndependentLength))
     returnCall <- cppLiteral("return(ADtapeSetup)")
     
-    allRcode <- do.call('call', c(list('{'), list(setSizeLine), copyIntoIndepVarCode, list(returnCall)), quote=TRUE)
+    allRcode <- do.call('call', c(list('{'), list(assignTapePtrCode), list(setSizeLine), copyIntoIndepVarCode, list(returnCall)), quote=TRUE)
     allCode <- RparseTree2ExprClasses(allRcode)
     TF$code <- cppCodeBlock(code = allCode, objectDefs = localVars)
     TF

@@ -197,24 +197,23 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                                   invisible(NULL)
                                               },
                                               addGradientFunction = function(funName, independentVarNames) {
-                                                 ADfunName <- if(funName == 'operator()') 'run_AD_' else paste0(funName, '_AD_')
+                                                  ##ADfunName <- if(funName == 'operator()') 'run_AD_' else paste0(funName, '_AD_')
                                                  regularFun <- RCfunDefs[[funName]]
                                                  argumentTransferName <- 'ADargumentTransfer'
                                                  newFunName <- 'ADgradient'
                                                  functionDefs[[newFunName]] <<- makeGradientFunction(newFunName, regularFun, argumentTransferName, independentVarNames)
+##                                                 functionDefs[[newFunName]]$buildSEXPinterfaceFun(className = nfProc$name)
                                                  invisible(NULL)
                                              },
                                               addADclassContentOneFun = function(funName) {
-                                                  browser()
                                                   addTypeTemplateFunction(funName)
                                                   independentVarNames <- names(functionDefs[[funName]]$args$symbols)
                                                   addADtapingFunction(funName, independentVarNames = independentVarNames, dependentVarNames = 'ANS_' )
                                                   addADargumentTransferFunction(funName, independentVarNames = independentVarNames)
-                                                  addGradientFunction(funName, independentVarNames = independentVarNames)
+                                                ##  addGradientFunction(funName, independentVarNames = independentVarNames)
 
                                               },
                                               addADclassContent = function() {
-                                                  browser()
                                                   CPPincludes <<- c("<cppad/cppad.hpp>", CPPincludes)
                                                   Hincludes <<- c("<cppad/cppad.hpp>", nimbleIncludeFile("nimbleCppAD.h"), Hincludes)
                                                   addInheritance("nimbleFunctionCppADbase")
@@ -229,7 +228,7 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                                   
                                                   ## globals to hold the global static definition
                                                   globals <- cppGlobalObjects(name = 'staticGlobals', staticMembers = TRUE)
-                                                  globals$objectDefs[['staticGlobalTape']] <- cppVarFull(baseType = 'vector', templateArgs = list(cppVarFull(baseType = 'CppAD::ADFun', templateArgs = list('double'), ptr = 1)), name = 'genName::allADtapePtrs_')
+                                                  globals$objectDefs[['staticGlobalTape']] <- cppVarFull(baseType = 'vector', templateArgs = list(cppVarFull(baseType = 'CppAD::ADFun', templateArgs = list('double'), ptr = 1)), name = paste0(name,'::allADtapePtrs_'))
                                                   globalObjectsDefs[['allADtapePtrs_']] <<- globals
                                                   invisible(NULL)
                                               },
@@ -279,6 +278,7 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                                   ##buildSEXPfinalizer()
                                                   buildRgenerator(where = where)
                                                   buildCmultiInterface()
+                                                  if(environment(nfProc$nfGenerator)$enableDerivs) addADclassContent()
                                               },
                                               makeCppNames = function() {
                                                   Rnames2CppNames <<- as.list(Rname2CppName(objectDefs$getSymbolNames()))

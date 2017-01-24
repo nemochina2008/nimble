@@ -71,6 +71,7 @@ nimbleFunction <- function(setup         = NULL,
                            methods       = list(),
                            globalSetup   = NULL,
                            contains      = NULL,
+                           enableDerivs  = FALSE,
                            name          = NA,
                            check         = getNimbleOption('checkNimbleFunction'),
                            where         = getNimbleFunctionEnvironment()
@@ -91,6 +92,7 @@ nimbleFunction <- function(setup         = NULL,
     className <- name
 
     methodList <- c(list(run = run), methods)   # create a list of the run function, and all other methods
+    if(enableDerivs) methodList <- c(methodList, buildDerivMethods(methodList))
     methodList <- lapply(methodList, nfMethodRC, check = check)
     ## record any setupOutputs declared by setupOutput()
     setupOutputsDeclaration <- nf_processSetupFunctionBody(setup, returnSetupOutputDeclaration = TRUE)
@@ -118,6 +120,18 @@ nimbleFunction <- function(setup         = NULL,
     }
                       
     return(generatorFunction)
+}
+
+buildDerivMethods <- function(methodsList) {
+    derivMethodsList <- list()
+    for(i in seq_along(methodsList)) {
+        derivMethodsList[[i]] <- methodsList[[i]]
+        newCall <- as.call(c(list(quote(ADargumentTransfer)), lapply(names(formals(methodsList[[i]])), as.name)))
+        body(derivMethodsList[[i]]) <- substitute({return(vectorDouble_2_NimArr(getGradient(NEWCALL))); returnType(double(1))}, list(NEWCALL = newCall))
+        
+    }
+    names(derivMethodsList) <- paste0(names(methodsList), '_gradient')
+    derivMethodsList
 }
 
 # for now export this as R<3.1.2 give warnings if don't
