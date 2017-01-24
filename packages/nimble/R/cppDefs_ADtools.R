@@ -275,7 +275,7 @@ makeGradientFunction <- function(newFunName = 'run_gradient_', regularFun, argum
     localVars <- symbolTable()
     argTransferCall <- substitute(FOO(), list(FOO = as.name(argumentTransferName)))
     for(i in seq_along(independentVarNames)) argTransferCall[[i + 1]] <- as.name(independentVarNames[[i]])
-    oneLinerCode <- substitute(return(vectorDouble_2_NimArr(getJacobian(ATC))),  list(ATC = argTransferCall))
+    oneLinerCode <- substitute(return(vectorDouble_2_NimArr(getGradient(ATC))),  list(ATC = argTransferCall))
     allRcode <- do.call('call', c(list('{'), list(oneLinerCode)), quote=TRUE)
 
     allCode <- RparseTree2ExprClasses(allRcode)
@@ -312,15 +312,15 @@ makeADargumentTransferFunction <- function(newFunName = 'arguments2cppad', targe
             thisSizes <- thisSym$size
             sizeList <- lapply(thisSizes, function(x) c(1, x))
             names(sizeList) <- indexVarNames[1:length(sizeList)]
-            newRcode <- makeCopyingCodeBlock(quote(memberData(ADtapeSetup, ADindependentVars)), as.name(thisName), sizeList, indicesRHS = FALSE, incrementIndex = quote(netIncrement_))
+            newRcode <- makeCopyingCodeBlock(quote(memberData(ADtapeSetup, independentVars)), as.name(thisName), sizeList, indicesRHS = FALSE, incrementIndex = quote(netIncrement_))
             copyIntoIndepVarCode[[ivn+1]] <- newRcode 
             totalIndependentLength <- totalIndependentLength + prod(thisSizes)
         } else {
-            copyIntoIndepVarCode[[ivn+1]] <- substitute({memberData(ADtapeSetup, ADindependentVars)[netIncrement_] <- RHS; netIncrement_ <- netIncrement_ + 1}, list(RHS = as.name(thisName))) 
+            copyIntoIndepVarCode[[ivn+1]] <- substitute({memberData(ADtapeSetup, independentVars)[netIncrement_] <- RHS; netIncrement_ <- netIncrement_ + 1}, list(RHS = as.name(thisName))) 
             totalIndependentLength <- totalIndependentLength + 1
         }
     }
-    setSizeLine <- substitute(cppMemberFunction(resize(memberData(ADtapeSetup, ADindependentVars), TIL)), list(TIL = totalIndependentLength))
+    setSizeLine <- substitute(cppMemberFunction(resize(memberData(ADtapeSetup, independentVars), TIL)), list(TIL = totalIndependentLength))
     returnCall <- cppLiteral("return(ADtapeSetup)")
     
     allRcode <- do.call('call', c(list('{'), list(setSizeLine), copyIntoIndepVarCode, list(returnCall)), quote=TRUE)
