@@ -270,7 +270,6 @@ makeGradientFunction <- function(newFunName = 'run_gradient_', regularFun, argum
     GF <- RCfunctionDef()
     GF$name <- newFunName
     GF$args <- regularFun$args
-    browser()
     GF$returnType <- symbolBasic(name = 'NAME_NOT_USED', type = 'double', nDim = 1, size = as.numeric(NA))$genCppVar()## could check that this is double: regularFun$returnType
     localVars <- symbolTable()
     argTransferCall <- substitute(FOO(), list(FOO = as.name(argumentTransferName)))

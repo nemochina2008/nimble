@@ -223,13 +223,16 @@ cppNimbleFunctionClass <- setRefClass('cppNimbleFunctionClass',
                                                   ##cppClass$objectDefs$addSymbol(cppVarFull(name = 'ADtapeSetup', baseType = 'nimbleCppADinfoClass'))
                                                   objectDefs$addSymbol(cppVarFull(name = 'ADtapeSetup', baseType = 'nimbleCppADinfoClass'))
                                                   addADclassContentOneFun("operator()")
-                                                  addStaticInitClass()
                                                   ## static declaration in the class definition
                                                   
                                                   ## globals to hold the global static definition
                                                   globals <- cppGlobalObjects(name = 'staticGlobals', staticMembers = TRUE)
                                                   globals$objectDefs[['staticGlobalTape']] <- cppVarFull(baseType = 'vector', templateArgs = list(cppVarFull(baseType = 'CppAD::ADFun', templateArgs = list('double'), ptr = 1)), name = paste0(name,'::allADtapePtrs_'))
-                                                  globalObjectsDefs[['allADtapePtrs_']] <<- globals
+                                                  ##globalObjectsDefs[['allADtapePtrs_']] <<- globals
+                                                  neededTypeDefs[['allADtapePtrs_']] <<- globals
+
+                                                  addStaticInitClass()
+
                                                   invisible(NULL)
                                               },
                                               buildCmultiInterface = function(dll = NULL) {
