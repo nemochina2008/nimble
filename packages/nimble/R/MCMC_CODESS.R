@@ -1323,7 +1323,7 @@ autoCodessModel_oldClass <- setRefClass(
       md <<- nimbleModel(code=code, constants=constants, returnDef=TRUE)
       Rmodel <<- md$newModel(data=data, inits=inits)
       scalarNodeVector <<- Rmodel$getNodeNames(stochOnly=TRUE, includeData=FALSE, returnScalarComponents=TRUE)
-      latentNodeVector <<- Rmodel$getNodeNames(stochOnly=TRUE, includeData=FALSE, latent=TRUE)
+      latentNodeVector <<- Rmodel$getNodeNames(stochOnly=TRUE, includeData=FALSE, latent=TRUE,returnScalarComponents=TRUE)
       nodeGroupScalars <<- lapply(scalarNodeVector, function(x) x)
       nodeGroupAllBlocked <<- list(scalarNodeVector)
       stochNodeVector <- Rmodel$getNodeNames(stochOnly=TRUE, includeData=FALSE, returnScalarComponents=FALSE)
@@ -1627,7 +1627,67 @@ autoCodessClass_oldClass <- setRefClass(
           DefaultSamplerList[[LeastIndex[[it]]]]$type <- 'RW_rotated_block'
             }
         } 
-        print("Now, the sampler of the least mixing is:")
+        
+for(i1 in 1: n){
+        
+        #random walk log scale
+        if ((DefaultSamplerList[[i1]]$type == 'sampler_RW' | DefaultSamplerList[[i1]]$type == 'RW') & !is.null(DefaultSamplerList[[i1]]$control$log)){
+          if(DefaultSamplerList[[i1]]$control$log){
+			j <- which(Candidates==3)	
+            NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+            NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW_log"))
+            currentSamplerIndex[[i1]]<<-j
+            NodeInfo[[i1]]$scale[j] <<- 1
+          } else {
+			j <- which(Candidates==2)	        
+		    NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+			
+	    	NodeInfo[[i1]]$scale[j] <<- 1
+			
+	
+            NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW"))
+            currentSamplerIndex[[i1]]<<-j
+            
+          }
+        } else if(regexpr('conjugate', NodeInfo[[i1]]$type)>0){
+          j <- which(Candidates==1)	
+          NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+          NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "conjugate"))
+          currentSamplerIndex[[i1]]<<-j
+
+        } else if(NodeInfo[[i1]]$type=='sampler_slice'){
+          j <- which(Candidates==4)	
+          NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+          NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "slice"))
+          currentSamplerIndex[[i1]]<<-j
+
+        } else if(NodeInfo[[i1]]$type=='sampler_RW_block'){
+          j <- which(Candidates==5)	
+          NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+          NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW_block"))
+          currentSamplerIndex[[i1]]<<-j
+
+        }  else if(NodeInfo[[i1]]$type=='sampler_AF_slice'){
+          j <- which(Candidates==6)	
+          NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+          NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "sampler_AF_slice"))
+          
+        }  else if(NodeInfo[[i1]]$type=='RW_rotated_block'){
+          j <- which(Candidates==7)	
+          NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+          NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW_rotated_block"))
+          currentSamplerIndex[[i1]]<<-j
+
+        } else {
+		  j <- which(Candidates==2)	  
+          NodeInfo[[i1]]$currentIndices <<- unique(c(NodeInfo[[i1]]$currentIndices, j))
+          NodeInfo[[i1]]$Samplers <<- unique(c(NodeInfo[[i1]]$Samplers, "RW"))
+          currentSamplerIndex[[i1]]<<-j
+
+        }
+        
+      } 
+		print("Now, the sampler of the least mixing is:")
         print(DefaultSamplerList[[LeastIndex[[it]]]]$type)
         print(DefaultSamplerList[[LeastIndex[[it]]]]$target)
         print("Efficiency is:")
@@ -1640,6 +1700,7 @@ autoCodessClass_oldClass <- setRefClass(
 
         print("Scale List:")
         print(ScaleList)
+      
 
         
         
@@ -1697,10 +1758,14 @@ autoCodessClass_oldClass <- setRefClass(
 		
         namesToKeep <- monitor
         for(j in 1:length(namesToKeep)){         
-			if(currentSamplerIndex[[j]]==1){			
-				#CmcmcList[[i]]$samplerFunctions$contentsList[[j]]$getScaleHistory()
+			#if(currentSamplerIndex[[j]]==1){			
+				#scaleList<-CmcmcList[[i]]$samplerFunctions$contentsList[[j]]$getScaleHistory()
+				
+				
+
+				#NodeInfo[[j]]$scale[[currentSamplerIndex[[j]]]]<<-scaleList[[length(scaleList)]]
 				#CmcmcList[[i]]$samplerFunctions$contentsList[[j]]$getAcceptanceRateHistory()
-			}
+			#}
         }
 		samplesList[[i]] <- samplesTEMP[, namesToKeep]
         ## end of slight hack...

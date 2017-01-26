@@ -622,7 +622,7 @@ Details: See the initialize() function
 configureMCMC <- function(model, nodes, control = list(), 
                           monitors, thin = 1, monitors2 = character(), thin2 = 1,
                           useConjugacy = TRUE, onlyRW = FALSE, onlySlice = FALSE, multivariateNodesAsScalars = FALSE,
-                          print = FALSE, autoBlock = FALSE, oldConf, ...) {
+                          print = FALSE, autoBlock = FALSE, autoAdapt = FALSE, oldConf, ...) {
     
     if(!missing(oldConf)){
         if(!is(oldConf, 'MCMCconf'))
@@ -635,6 +635,7 @@ configureMCMC <- function(model, nodes, control = list(),
     if(missing(monitors))     monitors <- NULL
 
     if(autoBlock) return(autoBlock(model, ...)$conf)
+    if(autoAdapt) return(autoAdapt(model, ...)$conf)
     
     thisConf <- MCMCconf(model = model, nodes = nodes, control = control, 
                          monitors = monitors, thin = thin, monitors2 = monitors2, thin2 = thin2,
