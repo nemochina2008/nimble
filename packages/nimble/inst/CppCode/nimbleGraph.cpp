@@ -6,6 +6,7 @@ graphNode::graphNode(int inputCgraphID, NODETYPE inputType, const string &inputN
   CgraphID(inputCgraphID),
   name(inputName),
   touched(false),
+  touched2(false),
   numChildren(0) {
   RgraphID = CgraphID + 1;
 }
@@ -106,6 +107,12 @@ SEXP getDependencies(SEXP SgraphExtPtr, SEXP Snodes, SEXP Somit, SEXP Sdownstrea
   bool downstream = SEXP_2_bool(Sdownstream);
   vector<int> ans = graphPtr->getDependencies(nodes, omit, downstream);
   return(vectorInt_2_SEXP(ans, 1)); // add 1 index for R
+}
+
+SEXP topologicalSortOrder(SEXP SgraphExtPtr) {
+  nimbleGraph *graphPtr = static_cast<nimbleGraph *>(R_ExternalPtrAddr(SgraphExtPtr));
+  vector<int> sortOrder = graphPtr->topologicalSortOrder();
+  return(vectorInt_2_SEXP(sortOrder, 1));
 }
 
 SEXP anyStochParents(SEXP SgraphExtPtr) {
@@ -347,6 +354,130 @@ void nimbleGraph::getDependenciesOneNode(vector<int> &deps, int CgraphID, bool d
 #endif
 }
 
+#define _DEBUG_TOPSORT
 
+vector<int> nimbleGraph::topologicalSortOrder() {
+  // newCindices will an ordering so oldNodeIDs[Cindices] is validly sorted
 
+  // things to check: for(j = 0; j < 0; ++j) behavior.
+  // create some kind of failsafe like n^2 passes over everything,
+  // or no new nodes added from a pass.
+  
+  
+  // then go through their child nodes, check if all parents are touched.
+  //
 
+  vector<int> newCindices;
+  
+  vector<graphNode*> nodesToCheck, newNodesToCheck;
+
+  // first take nodes with no parents.
+  int i, j;
+#ifdef _DEBUG_TOPSORT
+  std::cout<<"COLLECTING NO-PARENT NODES:\n";
+#endif
+
+  for(i = 0; i < numNodes; ++i) {
+    if(graphNodeVec[i]->parents.size() == 0) {
+#ifdef _DEBUG_TOPSORT
+      std::cout<<"  Adding no-parent node "<<graphNodeVec[i]->name<<"\n";
+      std::cout<<"     Adding children for next round:";
+#endif
+      newCindices.push_back(graphNodeVec[i]->CgraphID); // should be same as i
+      graphNodeVec[i]->touched = true;
+      for(j = 0; j < graphNodeVec[i]->numChildren; ++j) {
+	// impossible for children to be touched, because they must have parents
+	nodesToCheck.push_back(graphNodeVec[i]->children[j]);
+#ifdef _DEBUG_TOPSORT
+	std::cout<<" "<<graphNodeVec[i]->children[j]->name;
+#endif
+	
+      }
+#ifdef _DEBUG_TOPSORT
+      std::cout<<"\n";
+#endif
+
+    }
+  }
+
+  bool done(false), allParentsTouched;
+
+  int numNodesToCheck, numParentsThisNode;
+  graphNode *thisNodeToCheck;
+  while(!done) {
+    // iterate over nodesToCheck
+    numNodesToCheck = nodesToCheck.size();
+#ifdef _DEBUG_TOPSORT
+  std::cout<<"NEW ITERATION TO CHECK "<<numNodesToCheck<<" NODES\n";
+#endif
+    for(i = 0; i < numNodesToCheck; ++i) {
+      // check one node
+      allParentsTouched = true;
+      thisNodeToCheck = nodesToCheck[i];
+#ifdef _DEBUG_TOPSORT
+      std::cout<<"  "<<i<<": checking "<<thisNodeToCheck->name <<"\n";
+#endif
+
+      if(thisNodeToCheck->touched) {
+#ifdef _DEBUG_TOPSORT
+	std::cout<<"    Already touched\n";
+#endif
+	continue; // conceivable if it was first added to newNodesToCheck and then later touched during last iteration
+      }
+      if(thisNodeToCheck->touched2) {
+#ifdef _DEBUG_TOPSORT
+	std::cout<<"    Already checked in this iteration\n";      
+#endif
+	continue;
+      }
+      thisNodeToCheck->touched2 = true; // use touched2 to flag that we've already checked this node in this pass
+      j = 0;
+      numParentsThisNode = thisNodeToCheck->parents.size();
+      // see if all parents were touched
+      while(allParentsTouched && j < numParentsThisNode) {
+	if(!(thisNodeToCheck->parents[j]->touched)) allParentsTouched = false;
+	else ++j;
+      }
+      if(allParentsTouched) { // ok to add to sorted order and include children for next round
+#ifdef _DEBUG_TOPSORT
+	std::cout<<"    All parents touched TRUE. Adding to next round:";
+#endif
+
+	newCindices.push_back(thisNodeToCheck->CgraphID);
+	thisNodeToCheck->touched = true;
+	for(j = 0; j < thisNodeToCheck->numChildren; ++j) {
+	  // impossible for children to be touched, because this parent was just touched
+#ifdef _DEBUG_TOPSORT
+	  std::cout<<" "<<thisNodeToCheck->children[j]->name;
+#endif
+
+	  newNodesToCheck.push_back(thisNodeToCheck->children[j]);
+	}
+#ifdef _DEBUG_TOPSORT
+	std::cout<<"\n";
+#endif
+
+      } else { // not all parents touched, so add same node to next round
+#ifdef _DEBUG_TOPSORT
+	std::cout<<"    All parents touched FALSE. Adding self to next round.\n";
+#endif
+	newNodesToCheck.push_back(thisNodeToCheck);
+      }
+    }
+    for(i = 0; i < numNodesToCheck; ++i) {
+      nodesToCheck[i]->touched2 = false;
+    }
+    if(newNodesToCheck.size() == 0) {
+      done = true;
+    } else {
+      nodesToCheck = newNodesToCheck;
+      newNodesToCheck.clear();
+      std::cout<<newNodesToCheck.size()<<"\n";
+    }
+  }
+  
+  for(i = 0; i < numNodes; ++i) {
+    graphNodeVec[i]->touched = false;
+  }
+  return(newCindices);
+}

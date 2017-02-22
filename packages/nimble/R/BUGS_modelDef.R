@@ -1779,9 +1779,23 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     allEdges <- as.numeric(t(cbind(edgesFrom, edgesTo)))
     graph <<- add.edges(graph, allEdges)                                         ## add all edges at once
 
+## SECTION FOR DEBUGGING EXPERIMENTAL TOPOLOGICAL SORT IN C++
+##    browser()
+    testNimbleGraph <- nimbleGraphClass()
+    testNimbleGraph$setGraph(edgesFrom, edgesTo, edgesParentExprID, types, allVertexNames, length(allVertexNames))
+    testSort <- .Call("topologicalSortOrder", testNimbleGraph$graphExtPtr)
+##    browser()
+    
     ## 11. Topologically sort and re-index all objects with vertex IDs
     if(debug) browser()
     newGraphID_2_oldGraphID <- as.numeric(topological.sort(graph, mode = 'out'))
+
+    ## PART OF EXPERIMENT CHECKING OF TOPOLOGICAL SORT IN C++
+    if(!(identical(as.integer(newGraphID_2_oldGraphID), testSort))) {
+        print("Found a case where C++ sorting is different from igraph sorting\n")
+        browser()
+    }
+    
     oldGraphID_2_newGraphID <- sort(newGraphID_2_oldGraphID, index = TRUE)$ix
     graph <<- permute.vertices(graph, oldGraphID_2_newGraphID)  # re-label vertices in the graph
 

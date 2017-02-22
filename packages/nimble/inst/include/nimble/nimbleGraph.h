@@ -21,7 +21,7 @@ struct graphNode {
   int RgraphID;
   int CgraphID; // always RgraphID-1
   string name;
-  bool touched; /* This is for arbitrary use by graph-traversing algorithms.  By convention it should be left at false for all nodes after completion of an algorithm. */
+  bool touched, touched2; /* This is for arbitrary use by graph-traversing algorithms.  By convention it should be left at false for all nodes after completion of an algorithm. */
   unsigned int numChildren;
   vector<graphNode*> children; /* pointers to child nodes */
   vector<int> childrenParentExpressionIDs; /* integer labels of how this node is used by child nodes. */
@@ -46,6 +46,7 @@ public:
   bool anyStochParentsOneNode(vector<int> &anyStochParents, int CgraphID);
   vector<int> getDependencies(const vector<int> &Cnodes, const vector<int> &Comit, bool downstream);
   void getDependenciesOneNode(vector<int> &deps, int CgraphID, bool downstream, unsigned int recursionDepth);
+  vector<int> topologicalSortOrder();
   ~nimbleGraph();
 };
 
@@ -56,6 +57,7 @@ extern "C" {
   SEXP anyStochDependencies(SEXP SextPtr);
   SEXP anyStochParents(SEXP SextPtr);
   SEXP getDependencies(SEXP SextPtr, SEXP Snodes, SEXP Somit, SEXP Sdownstream);
+  SEXP topologicalSortOrder(SEXP SextPtr);
 }
 
 #endif
