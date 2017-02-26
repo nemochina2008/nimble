@@ -7,6 +7,7 @@ nimbleUserNamespace <- as.environment(list(sessionSpecificDll = NULL))
 # These options are for development use at this point.
 .nimbleOptions <- as.environment(
     list(
+        testBUGSmodel_readModelOnly = FALSE, ## extreme developer model: short-circuit test_models so it only reads and sets up models, for checking on topological sort
         convertSingleVectorsToScalarsInSetupArgs = TRUE,
         messagesWhenBuildingOrFinalizingCppObjects = FALSE,
         indexDrop = TRUE,

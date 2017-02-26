@@ -1791,6 +1791,9 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     newGraphID_2_oldGraphID <- as.numeric(topological.sort(graph, mode = 'out'))
 
     ## PART OF EXPERIMENT CHECKING OF TOPOLOGICAL SORT IN C++
+    ## print(as.integer(newGraphID_2_oldGraphID))
+    ## print(allVertexNames[as.integer(newGraphID_2_oldGraphID)])
+    ## browser()
     if(!(identical(as.integer(newGraphID_2_oldGraphID), testSort))) {
         print("Found a case where C++ sorting is different from igraph sorting\n")
         browser()

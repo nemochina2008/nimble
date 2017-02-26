@@ -54,6 +54,8 @@ testBUGSmodel <- function(example = NULL, dir = NULL, model = NULL, data = NULL,
     Rmodel <- readBUGSmodel(model = model, data = data, inits = inits, dir = dir, useInits = useInits, debug = debug, check = FALSE, calculate = FALSE)
     # setting check and calculate to FALSE because check() and calculate() in some cases (e.g., ice, kidney) causes initialization of values such that inits as passed in do not match values in R or C model and failure of test of whether initial values are maintained
 
+    if(nimbleOptions()$testBUGSmodel_readModelOnly) return(invisible(NULL))
+    
     skip.file.path <- is.null(dir) || (!is.null(dir) && dir == "") ## previously we could have file.path(NULL, ...) and file.path("",...) cases.  Modifications from here down follow those in readBUGSmodel for Windows compatibility
 
     if(useInits) {
