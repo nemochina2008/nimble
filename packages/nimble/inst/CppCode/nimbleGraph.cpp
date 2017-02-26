@@ -515,11 +515,15 @@ vector<int> nimbleGraph::topologicalSortOrder() {
     int numChildren = graphNodeVec[nextIndexToTouch]->numChildren;
     sortedChildGraphIDs.resize(numChildren);
     for(j = 0; j < numChildren; ++j) {
+      sortedChildGraphIDs[j] = graphNodeVec[nextIndexToTouch]->children[j]->CgraphID;
       // BUILD A VECTOR OF CgraphIDs and sort them before inspecting and pushing them
       // This should match sorting done in igraph_neighbors in type_indexededgelist.c in igraph source
     }
+    std::sort(sortedChildGraphIDs.begin(), sortedChildGraphIDs.end() );
+
     for(j = 0; j < numChildren; ++j) {
-      int childIndex = CgraphID2index[ graphNodeVec[nextIndexToTouch]->children[j]->CgraphID ];
+      //      int childIndex = CgraphID2index[ graphNodeVec[nextIndexToTouch]->children[j]->CgraphID ];
+      int childIndex = CgraphID2index[ sortedChildGraphIDs[j] ];
       if(--(degreeIn[ childIndex ]) == 0) {
 	indicesToTouch.push( childIndex );
       }
