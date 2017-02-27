@@ -105,7 +105,12 @@ eigenizeCalls <- c( ## component-wise unarys valid for either Eigen array or mat
          diagonal  = 'eigenize_cWiseUnaryMatrix',
          'inverse' = 'eigenize_cWiseUnaryMatrix',
          'chol' = 'eigenize_matrixOps',
-         RRtest_add = 'eigenize_recyclingRuleFunction'
+         RRtest_add = 'eigenize_recyclingRuleFunction',
+         'eigenvecs' = 'eigenize_matrixOps',
+         'eigenvals' = 'eigenize_matrixOps',
+         'svdu' = 'eigenize_matrixOps',
+         'svdd' = 'eigenize_matrixOps',
+         'svdv' = 'eigenize_matrixOps'
          )
 )
 
@@ -460,6 +465,11 @@ eigenize_matrixOps <- function(code, symTab, typeEnv, workEnv) {
                         solve = 'EIGEN_SOLVE',
                         forwardsolve = 'EIGEN_FS',
                         backsolve = 'EIGEN_BS',
+                        eigenvals = 'EIGEN_EIGENVALS',
+                        eigenvecs = 'EIGEN_EIGENVECS',
+                        svdu = 'EIGEN_SVDU',
+                        svdd = 'EIGEN_SVDD',
+                        svdv = 'EIGEN_SVDV',
                         stop('should never get here')
                         )
     invisible(NULL)

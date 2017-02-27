@@ -241,6 +241,25 @@ print: A logical argument, specifying whether to print the ordered list of defau
             nameToPrint <- gsub('^sampler_', '', conjSamplerName)
             addSampler(target = conjugacyResult$target, type = conjSamplerFunction, control = conjugacyResult$control, print = print, name = nameToPrint)
         },
+        conjSamplerFunc = function(conjugacyResult) {
+            ## update May 2016: old (non-dynamic) system is no longer supported -DT
+            ##if(!getNimbleOption('useDynamicConjugacy')) {
+            ##    addSampler(target = conjugacyResult$target, type = conjugacyResult$type, control = conjugacyResult$control)
+            ##    return(NULL)
+            ##}
+            prior <- conjugacyResult$prior
+            dependentCounts <- sapply(conjugacyResult$control, length)
+            names(dependentCounts) <- gsub('^dep_', '', names(dependentCounts))
+            conjSamplerName <- createDynamicConjugateSamplerName(prior = prior, dependentCounts = dependentCounts)
+            if(!dynamicConjugateSamplerExists(conjSamplerName)) {
+                conjSamplerDef <- conjugacyRelationshipsObject$generateDynamicConjugateSamplerDefinition(prior = prior, dependentCounts = dependentCounts)
+                dynamicConjugateSamplerAdd(conjSamplerName, conjSamplerDef)
+            }
+            conjSamplerFunction <- dynamicConjugateSamplerGet(conjSamplerName)
+            nameToPrint <- gsub('^sampler_', '', conjSamplerName)
+            return (conjSamplerFunction)
+},
+
         
         addSampler = function(target, type = 'RW', control = list(), print = FALSE, name) {
             '
@@ -631,7 +650,7 @@ Details: See the initialize() function
 configureMCMC <- function(model, nodes, control = list(), 
                           monitors, thin = 1, monitors2 = character(), thin2 = 1,
                           useConjugacy = TRUE, onlyRW = FALSE, onlySlice = FALSE, multivariateNodesAsScalars = FALSE,
-                          print = FALSE, autoBlock = FALSE, oldConf, ...) {
+                          print = FALSE, autoBlock = FALSE, autoAdapt = FALSE, oldConf, ...) {
     
     if(!missing(oldConf)){
         if(!is(oldConf, 'MCMCconf'))
@@ -644,6 +663,7 @@ configureMCMC <- function(model, nodes, control = list(),
     if(missing(monitors))     monitors <- NULL
 
     if(autoBlock) return(autoBlock(model, ...)$conf)
+    if(autoAdapt) return(autoAdapt(model, ...)$conf)
     
     thisConf <- MCMCconf(model = model, nodes = nodes, control = control, 
                          monitors = monitors, thin = thin, monitors2 = monitors2, thin2 = thin2,

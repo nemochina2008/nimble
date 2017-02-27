@@ -35,6 +35,8 @@ setupCodeTemplateClass <- setRefClass('setupCodeTemplateClass',
 #		rgamma_keywordInfo
 #		d_dist_keywordInfo
 #		qp_dist_keywordInfo
+#   eigen_keywordInfo
+#   svd_keywordInfo
 #		nimOptim_keywordInfo
 #		values_keywordInfo
 #		calculate_keywordInfo
@@ -135,6 +137,39 @@ rexp_nimble_keywordInfo <- keywordInfoClass(
 ## 		return(code)		
 ## 	}
 ## 	)
+
+eigen_keywordInfo <- keywordInfoClass(
+  keyword = "eigen",
+  processor = function(code, nfProc){
+    eigenValsArg <- code$only.values
+    if(eigenValsArg == TRUE) code[[1]] <- parse(text = 'eigenvals')[[1]]
+    else  code[[1]] <- parse(text = 'eigenvecs')[[1]]
+    code[[3]] <- NULL #remove only.values argument
+    return(code)
+  }
+)
+
+svd_keywordInfo <- keywordInfoClass(
+  keyword = "svd",
+  processor = function(code, nfProc){
+    nuArg <- code$nu
+    nvArg <- code$nv
+    if((nuArg == 0) && (nvArg > 0)){
+      code[[1]] <- parse(text = 'svdv')[[1]]
+      code[[3]] <- NULL #remove nu argument
+    }
+    else if(nuArg > 0){
+      code[[1]] <- parse(text = 'svdu')[[1]]
+      code[[4]] <- NULL #remove nv argument
+    }
+    else{
+      code[[1]] <- parse(text = 'svdd')[[1]]
+      code[[3]] <- NULL #remove nu argument
+      code[[3]] <- NULL #remove nv argument
+    }
+    return(code)
+  }
+)
 
 nimOptim_keywordInfo <- keywordInfoClass(
 	keyword = 'nimOptim',
@@ -773,6 +808,8 @@ keywordList[['nimCopy']] <- nimCopy_keywordInfo
 keywordList[['[[']] <- doubleBracket_keywordInfo
 keywordList[['$']] <- dollarSign_keywordInfo
 keywordList[['[']] <- singleBracket_keywordInfo
+keywordList[['eigen']] <- eigen_keywordInfo
+keywordList[['svd']] <- svd_keywordInfo
 keywordList[['nimOptim']] <- nimOptim_keywordInfo
 keywordList[['dgamma']] <- d_gamma_keywordInfo
 keywordList[['pgamma']] <- pq_gamma_keywordInfo
@@ -836,6 +873,8 @@ matchFunctions[['nimCopy']] <- function(from, to, nodes, nodesTo, row, rowTo, lo
 matchFunctions[['double']] <- function(nDim, dim, default, ...){}
 matchFunctions[['int']] <- function(nDim, dim, default, ...){}
 matchFunctions[['nimOptim']] <- function(initPar, optFun, ...){} 
+matchFunctions[['eigen']] <- function(squareMat, only.values = FALSE){}
+matchFunctions[['svd']] <- function(mat, nu = 0, nv = 0){}
 matchFunctions[['dgamma']] <- function(x, shape, rate = 1, scale, log = FALSE){}
 matchFunctions[['rgamma']] <- function(n, shape, rate = 1, scale){}
 matchFunctions[['qgamma']] <- function(p, shape, rate = 1, scale, lower.tail = TRUE, log.p = FALSE){}
@@ -1404,7 +1443,6 @@ matchKeywordCodeMemberFun <- function(code, nfProc) {  ## handles cases like a$b
 matchKeywordCode <- function(code, nfProc){
     callName <- as.character(code[[1]])
     thisFunctionMatch <- matchFunctions[[ callName ]]
-
     ## see if this is a member function of an nf object
     if(!is.null(nfProc)) {
         modCallName <- if(callName == "run") "operator()" else callName
