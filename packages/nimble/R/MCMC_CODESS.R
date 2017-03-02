@@ -1588,7 +1588,7 @@ autoCodessClass_oldClass <- setRefClass(
               for(k in (it-1):1){	
                 if(NodeInfo[[k]][[LeastIndex[[it]]]]$Samplers == "RW_log"){      	
                   NodeInfo[[it]][[LeastIndex[[it]]]]$scale <<- NodeInfo[[k]][[LeastIndex[[it]]]]$scale
-                  DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scale=NodeInfo[[k]][[LeastIndex[[it]]]]$scale, adaptive = TRUE, log= TRUE)
+                  DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scale=NodeInfo[[k]][[LeastIndex[[it]]]]$scale, timesAdapted= it, adaptive = TRUE, log= TRUE)
                 }
               }
               
@@ -1596,7 +1596,7 @@ autoCodessClass_oldClass <- setRefClass(
               for(k in (it-1):1){	
                 if(NodeInfo[[k]][[LeastIndex[[it]]]]$Samplers == "RW"){      	
                   NodeInfo[[it]][[LeastIndex[[it]]]]$scale <<- NodeInfo[[k]][[LeastIndex[[it]]]]$scale
-                  DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scale=NodeInfo[[k]][[LeastIndex[[it]]]]$scale, adaptive = TRUE)
+                  DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scale=NodeInfo[[k]][[LeastIndex[[it]]]]$scale, timesAdapted= it, adaptive = TRUE)
                 }
               }
               
@@ -1647,7 +1647,7 @@ autoCodessClass_oldClass <- setRefClass(
               if(NodeInfo[[k]][[LeastIndex[[it]]]]$Samplers == 'sampler_RW_block' & NodeInfo[[it]][[LeastIndex[[it]]]]$target == NodeInfo[[k]][[LeastIndex[[it]]]]$target){      	
                 NodeInfo[[it]][[LeastIndex[[it]]]]$scale <<- NodeInfo[[k]][[LeastIndex[[it]]]]$scale
                 NodeInfo[[it]][[LeastIndex[[it]]]]$propCov <<- NodeInfo[[k]][[LeastIndex[[it]]]]$propCov
-                DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scale=NodeInfo[[k]][[LeastIndex[[it]]]]$scale, adaptive = TRUE, propCov=NodeInfo[[k]][[LeastIndex[[it]]]]$propCov)
+                DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scale=NodeInfo[[k]][[LeastIndex[[it]]]]$scale, timesAdapted= it, adaptive = TRUE, propCov=NodeInfo[[k]][[LeastIndex[[it]]]]$propCov)
                 
               }
             }
@@ -1657,7 +1657,7 @@ autoCodessClass_oldClass <- setRefClass(
               if(NodeInfo[[k]][[LeastIndex[[it]]]]$Samplers == 'RW_rotated_block' & NodeInfo[[it]][[LeastIndex[[it]]]]$target == NodeInfo[[k]][[LeastIndex[[it]]]]$target){      	
                 NodeInfo[[it]][[LeastIndex[[it]]]]$scaleVector <<- NodeInfo[[k]][[LeastIndex[[it]]]]$scaleVector
                 NodeInfo[[it]][[LeastIndex[[it]]]]$factorMat <<- NodeInfo[[k]][[LeastIndex[[it]]]]$factorMat
-                DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scaleVector=NodeInfo[[k]][[LeastIndex[[it]]]]$scaleVector, adaptive = TRUE, factorMat=NodeInfo[[k]][[LeastIndex[[it]]]]$factorMat)
+                DefaultSamplerList[[LeastIndex[[it]]]]$control <<-list(scaleVector=NodeInfo[[k]][[LeastIndex[[it]]]]$scaleVector, timesAdapted= it, adaptive = TRUE, factorMat=NodeInfo[[k]][[LeastIndex[[it]]]]$factorMat)
                 
               }
             }
