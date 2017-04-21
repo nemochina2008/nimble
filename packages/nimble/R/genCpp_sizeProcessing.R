@@ -100,7 +100,7 @@ scalarOutputTypes <- list(decide = 'logical', size = 'integer', isnan = 'logical
 ## and it will set the size expressions for A and for itself to 1.
 expressionSymbolTypeReplacements <- c('symbolNimbleListGenerator', 'symbolNimbleList', 'symbolNimbleFunction')
 
-exprClasses_setSizes <- function(code, symTab, typeEnv) { ## input code is exprClass
+texprClasses_setSizes <- function(code, symTab, typeEnv) { ## input code is exprClass
     ## name:
    if(code$isName) {
         ## If it doesn't exist and must exist, stop
@@ -116,8 +116,8 @@ exprClasses_setSizes <- function(code, symTab, typeEnv) { ## input code is exprC
                 } else {
                     code$type <- 'unknown'
                     ##if(exists('.AllowUnknowns', envir = typeEnv)) 
-                        if(!typeEnv$.AllowUnknowns)
-                            warning(paste0("variable '",code$name,"' has not been created yet."), call.=FALSE) 
+                        if(!typeEnv$.AllowUnknowns) 
+                            warning(paste0("variable '",code$name,"' has not been created yet."), call.=FALSE)
                 }
             } else {
                 ## otherwise fill in type fields from typeEnv object
@@ -2849,12 +2849,23 @@ sizeRmultivarFirstArg <- function(code, symTab, typeEnv) {
 }
 
 sizeVoidPtr <- function(code, symTab, typeEnv) {
-	
-	
+    ## Updating this from old code:
+    ## voidPtr is only used internally, not user-facing in the DSL
+    ## In old optim processing, voidPtr(arg, 'nimbleFunction') was constructed
+    ## I'm not sure the 'nimbleFunction' is actually used, but it creates a problem
+    ## now since there is no symbol for it.
+    ## I'll set useArgs FALSE for this specific case (in case there are other uses of voidPtr out there)
+
+    useArgs <- rep(TRUE, length(code$args))
+    if(length(code$args) > 1) {
+        if(inherits(code$args[[2]], 'exprClass'))
+            if(identical(code$args[[2]]$name, 'nimbleFunction'))
+                useArgs[-1] <- FALSE
+    }
     ## lift any argument that is an expression or scalar.  
     ## We expect only one argument
     ## Lift it if it is an expression, a numeric, or a scalar
-    asserts <- recurseSetSizes(code, symTab, typeEnv)
+    asserts <- recurseSetSizes(code, symTab, typeEnv, useArgs)
 
     lift <- TRUE
     if(inherits(code$args[[1]], 'exprClass')) {

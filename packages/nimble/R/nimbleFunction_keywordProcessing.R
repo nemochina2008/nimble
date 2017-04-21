@@ -1107,7 +1107,7 @@ length_char_SetupTemplate <- setupCodeTemplateClass(
 
 optimReadyFun_setupCodeTemplate <- setupCodeTemplateClass(
 	makeName = function(argList){Rname2CppName(deparse(argList$name))},
-	codeTemplate = quote(OPTIM_FUN <- OptimReadyFunction(name = OPTIM_FUN_INQUOTES, nimbleFunction = NFNAME, localNimbleFunctionName = LOCALORGNAME)),
+	codeTemplate = quote(OPTIM_FUN <- nimble:::OptimReadyFunction(name = OPTIM_FUN_INQUOTES, nimbleFunction = NFNAME, localNimbleFunctionName = LOCALORGNAME)),
 	makeCodeSubList = function(resultName, argList){
 		list(OPTIM_FUN = as.name(argList$name),
 			OPTIM_FUN_INQUOTES = argList$name, 

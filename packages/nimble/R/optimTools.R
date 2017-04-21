@@ -5,19 +5,19 @@
 ##		This is the class that represents the generated C++ wrapper to a nimbleFunction that fits the optim
 ##		framework, i.e. three arguments are int n, double* par and void* ex
 OptimReadyFunction <- setRefClass("OptimReadyFunction", 
-							fields = list(name = 'ANY',
-										  nimbleFunction = 'ANY',
-										  localNimbleFunctionName = 'ANY',
-										  generatorName = 'ANY'),
-							methods = list(
-							getName = function() return(name),
-							getNimbleFunction = function() return(nimbleFunction),
-							getOriginalName = function() return(localNimbleFunctionName),
-							getGeneratorName = function(){
-								if(inherits(generatorName, 'uninitializedField'))	generatorName <<- paste0('OPTIMREADY_',environment(nf_getGeneratorFunction(nimbleFunction) )$name)
-								return(generatorName)
-							}
-							)
+                                  fields = list(name = 'ANY',
+                                                nimbleFunction = 'ANY',
+                                                localNimbleFunctionName = 'ANY',
+                                                generatorName = 'ANY'),
+                                  methods = list(
+                                      getName = function() return(name),
+                                      getNimbleFunction = function() return(nimbleFunction),
+                                      getOriginalName = function() return(localNimbleFunctionName),
+                                      getGeneratorName = function(){
+                                          if(inherits(generatorName, 'uninitializedField'))	generatorName <<- paste0('OPTIMREADY_',environment(nf_getGeneratorFunction(nimbleFunction) )$name)
+                                          return(generatorName)
+                                      }
+                                  )
 )
 
 
@@ -64,9 +64,9 @@ funName2OptimFunName <- function(nameChar){
 
 
 
-argInfo2PointerStaticCast <- function(argInf){
+argInfo2PointerStaticCast <- function(argInf, nfProc){
 	
-	argInf <- matchKeywordCode(argInf)
+	argInf <- matchKeywordCode(argInf, nfProc)
 	charInf <- as.character(argInf)
 	if(length(charInf) == 1 || charInf[2] == '0')
 		return(paste0(charInf[1], '*'))
@@ -147,6 +147,7 @@ callToPackVPtrs <- function(listName, voidPointerNames){
 getAdditonalArgsListForOptim <- function(nfSym){
 	argInfo <- getArgInfoFromNFSym(nfSym)
 	argNames <- names(argInfo)
+        nfProc <- nfSym$nfProc
 	if(argInfo[[1]] != substitute(double(1) ) ){
 		functionName <- nfSym$name
 		warningMessage <- paste('trying to optimize function', functionName, 'but first argument is not a numeric vector')
@@ -157,7 +158,7 @@ getAdditonalArgsListForOptim <- function(nfSym){
 #	staticCastList[[argNames[1] ]] <- argInfo2PointerStaticCast(argInfo[[1]])		#This is unnecessary
 	if(length(argNames) >= 2)
 	for(i in 2:length(argNames))
-		staticCastList[[ argNames[i] ]] <- argInfo2PointerStaticCast(argInfo[[i]] )
+		staticCastList[[ argNames[i] ]] <- argInfo2PointerStaticCast(argInfo[[i]], nfProc )
 	return(staticCastList)
 }
 
@@ -196,7 +197,7 @@ makeFixedParameterCallCodeForOptim <- function(argInfo){
 }
 
 makeOptimFunctionCallLine <- function(funName, argInfo){
-	callChar <- paste0('double ans = (*', funName,') ( (*newpars) ', makeFixedParameterCallCodeForOptim(argInfo), ');')
+	callChar <- paste0('double ans = (*', funName,').run( (*newpars) ', makeFixedParameterCallCodeForOptim(argInfo), ');')
 	return(cppLiteral(callChar))	
 }
 
