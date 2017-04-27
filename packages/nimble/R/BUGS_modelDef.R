@@ -2043,7 +2043,7 @@ modelDefClass$methods(genVarInfo3 = function() {
                                                        nDim = nDim,
                                                        anyStoch = FALSE)
             }
-            if(varInfo[[rhsVar]]$nDim != length(BUGSdecl$parentIndexNamePieces[[iV]]))
+            if(varInfo[[rhsVar]]$nDim != length(BUGSdecl$parentIndexNamePieces[[iV]])) ## Fails here on stoch node. parentIndexNamePieces assumed indices are constants
                 stop("Dimension of ", rhsVar, " is ", varInfo[[rhsVar]]$nDim, ", which does not match its usage in '", deparse(BUGSdecl$code), "'.")
             if(varInfo[[rhsVar]]$nDim > 0) {
                 for(iDim in 1:varInfo[[rhsVar]]$nDim) {
