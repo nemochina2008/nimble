@@ -1276,7 +1276,12 @@ splitCompletionForOrigNodes <- function(var2nodeOrigID, var2vertexID, maxOrigNod
 }
 
 splitVertices <- function(var2vertexID, unrolledBUGSindices, indexExprs = NULL, indexNames = NULL, parentExpr, parentExprReplaced = NULL, parentIndexNamePieces, replacementNameExprs, nextVertexID, maxVertexID, debug = FALSE) {
-        if(debug) browser()
+    if(debug) browser()
+    ## parentIndexNamePieces: when there is an NA for a dynamic index, we should assume a split on the full range of values.
+    ## This is the same case as anyContext = TRUE and all(useContent) = TRUE, i.e. boolUseUnrolledRow <- rep(TRUE, nrow(unrolledBUGSindices))
+    ## The "context" label may sometimes apply to x[dynamicI] even with no context.
+    ## 
+    
     ## 1. Determine which indexExprs are in parentExpr
     useContext <- unlist(lapply(indexExprs, isNameInExprList, parentExpr))
     anyContext <- any(useContext)
@@ -1288,7 +1293,8 @@ splitVertices <- function(var2vertexID, unrolledBUGSindices, indexExprs = NULL, 
             boolUseUnrolledRow <- rep(TRUE, nrow(unrolledBUGSindices))
     }
     ## 3. Determine if indices are all scalar
-    allScalar <- TRUE
+        allScalar <- TRUE
+    ## parentIndexNamePieces NA: need to decide if these count for scalar processing. I think they would count as scalar, using the 
     vectorIndices <- lapply(parentIndexNamePieces, function(x) {if(is.list(x)) {allScalar <<- FALSE; return(TRUE)}; FALSE})
 
         ## step 4 evaporated
@@ -1300,7 +1306,7 @@ splitVertices <- function(var2vertexID, unrolledBUGSindices, indexExprs = NULL, 
 
     ## 6. All scalar case: iterate or vectorize via cbind and put new vertexIDs over -1s
     if(allScalar) {
-        if(anyContext) {
+        if(anyContext) { ## parentIndexNamePieces NA: This block is where we want to go.  Goal of next step is to set varIndicesToUse. For an NA, we want the full extent.
             boolIndexNamePiecesExprs <- !unlist(lapply(parentIndexNamePieces, is.numeric)) 
             if(all(boolIndexNamePiecesExprs)) {
                 test <- try(varIndicesToUse <- unrolledBUGSindices[ boolUseUnrolledRow, unlist(parentIndexNamePieces) ])
@@ -1312,7 +1318,7 @@ splitVertices <- function(var2vertexID, unrolledBUGSindices, indexExprs = NULL, 
                 for(iii in seq_along(indexPieceNumericInds)) varIndicesToUse[, indexPieceNumericInds[iii] ] <- parentIndexNamePieces[[ indexPieceNumericInds[iii] ]]
             }
         }        
-        else {
+        else { ## is it hard-coded like x ~ dnorm(mu[1,2], 1)
             if(is.null(parentIndexNamePieces))
                 stop("Error in splitVertices: you may have omitted indexing for a multivariate variable: ", as.character(parentExprReplaced), ".")
             if(length(parentIndexNamePieces)==1) varIndicesToUse <- as.numeric(parentExprReplaced[[3]])
@@ -1321,6 +1327,8 @@ splitVertices <- function(var2vertexID, unrolledBUGSindices, indexExprs = NULL, 
                 for(iI in 1:ncol(varIndicesToUse)) varIndicesToUse[1, iI] <- as.numeric(parentExprReplaced[[iI+2]])
             }
         }
+        ## parentIndexNamePieces Should there be a unique in one of the next lines? Or varIndicesToUse <- unique(varIndicesToUse).
+        ## OR use a !duplicated construction in boolUseUnrolledRow <- rep(TRUE, nrow(unrolledBUGSindices)) above
         currentVertexIDs <- var2vertexID[varIndicesToUse]
         needsVertexID <- is.na(currentVertexIDs)
         numNewVertexIDs <- sum(needsVertexID)
@@ -1651,6 +1659,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
         for(iV in seq_along(rhsVars)) {  ## Iterate over the RHS variables in a BUGS line
             rhsVar <- rhsVars[iV]
             nDim <- varInfo[[rhsVar]]$nDim
+            ## For parentIndexNamePieces NULL, this check won't work
             if(nDim != length(BUGSdecl$parentIndexNamePieces[[iV]]))  # this check should be redundant with equivalent check in genVarInfo3
                stop("Dimension of ", rhsVar, " is ", nDim, ", which does not match its usage in '", deparse(BUGSdecl$code), "'.")
             if(nDim > 0) { ## Make the split.  This function is complicated.
@@ -2043,6 +2052,7 @@ modelDefClass$methods(genVarInfo3 = function() {
                                                        nDim = nDim,
                                                        anyStoch = FALSE)
             }
+            ## Plan for having NAs in parentIndexNamePieces: bail out for that dimension of this step: it means size information cannot be gleaned from this RHS declaration
             if(varInfo[[rhsVar]]$nDim != length(BUGSdecl$parentIndexNamePieces[[iV]])) ## Fails here on stoch node. parentIndexNamePieces assumed indices are constants
                 stop("Dimension of ", rhsVar, " is ", varInfo[[rhsVar]]$nDim, ", which does not match its usage in '", deparse(BUGSdecl$code), "'.")
             if(varInfo[[rhsVar]]$nDim > 0) {
