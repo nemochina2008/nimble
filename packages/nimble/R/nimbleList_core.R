@@ -140,7 +140,7 @@ nimbleList <- function(...,
                                             type = deparse(Call[[iArg]][[1]]))
         argList[[iArg-1]]$dim  <- if(length(Call[[iArg]])>1) deparse(Call[[iArg]][[2]])
                                             else 0
-        initialValueList[[iArg-1]] <- NULL
+        initialValueList[[iArg-1]] <- NA
       }
     }
     
