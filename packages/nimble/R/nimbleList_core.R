@@ -2,13 +2,15 @@ nl_refClassLabelMaker <- labelFunctionCreator('nimListClass')
 
 nimbleListDefClass <- setRefClass(
     ## This class holds a list of type information such as
-    ## A = double(1), B = integer(2)
+    ## A = double(1), B = integer(2),
+    ## as well as initial values information for each type.
     ## The types need not be numeric.
     ## In general, ideally, they could be another nimbleList or a nimbleFunction
     Class = "nimbleListDefClass",
     fields = list(types = 'ANY',
                   className = 'ANY',
-                  predefined = 'ANY')
+                  predefined = 'ANY',
+                  initialValues = 'ANY')
 )
 
 nimbleListBase <- setRefClass(Class = 'nimbleListBase', 
@@ -30,7 +32,8 @@ nimbleListBase <- setRefClass(Class = 'nimbleListBase',
 #' @param name The name of the object, given as a character string.
 #' @param type The type of the object, given as a character string.
 #' @param dim  The dimension of the object, given as an integer.  This can be left blank if the object is a nimbleList.
-#'
+#' @param initialValue An inital value that the object will default to when the nimbleList is constructed.
+#' 
 #' @author NIMBLE development team
 #'
 #' @export
@@ -47,16 +50,17 @@ nimbleListBase <- setRefClass(Class = 'nimbleListBase',
 #' @examples 
 #' nimbleTypeList <- list()
 #' nimbleTypeList[[1]] <- nimbleType(name = 'x', type = 'integer', dim = 0)
-#' nimbleTypeList[[2]] <- nimbleType(name = 'Y', type = 'double', dim = 2)
+#' nimbleTypeList[[2]] <- nimbleType(name = 'Y', type = 'double', dim = 2, initialValue = diag(2))
 #'
 nimbleType <- setRefClass(
   Class = 'nimbleType',
-  fields = c('name', 'type', 'dim'),
+  fields = c('name', 'type', 'dim', 'initialValue'),
   methods = list(
-    initialize = function(name, type, dim = NA){
+    initialize = function(name, type, dim = NA, initialValue = NA){
       name <<- name
       type <<- type
       dim <<- dim
+      initialValue <<- initialValue
     },
     show = function(){
       cat("nimbleType object with name ", name, ", type ", type, ", dim ",
@@ -116,6 +120,7 @@ nimbleList <- function(...,
     if(length(Call) < 2)
       stop("No arguments specified for nimbleList")
     argList <- list()
+    initialValueList <- list()
     
     ## left side of || statement catches list(...) arguments
     ## right side captures name of a previously defined list
@@ -124,8 +129,9 @@ nimbleList <- function(...,
       callList <- eval(Call[[2]], envir = parent.frame())
       for(iArg in seq_along(callList)){
         argList[[iArg]] <- list(name = callList[[iArg]]$name,
-                                        type = callList[[iArg]]$type,
-                                        dim = callList[[iArg]]$dim)
+                                type = callList[[iArg]]$type,
+                                dim = callList[[iArg]]$dim)
+        initialValueList[[iArg]] <- callList[[iArg]]$initialValue
       }
     }
     else{  ## if arguments are expressions e.g. nimListDouble = double(2)
@@ -134,6 +140,7 @@ nimbleList <- function(...,
                                             type = deparse(Call[[iArg]][[1]]))
         argList[[iArg-1]]$dim  <- if(length(Call[[iArg]])>1) deparse(Call[[iArg]][[2]])
                                             else 0
+        initialValueList[[iArg-1]] <- NULL
       }
     }
     
@@ -141,7 +148,7 @@ nimbleList <- function(...,
                   types =  sapply(argList, function(x){return(x$type)}),
                   dims =  sapply(argList, function(x){return(x$dim)}))
     if(is.na(name)) name <- nf_refClassLabelMaker()
-    nlDefClassObject <- nimbleListDefClass(types = types, className = name, predefined = predefined) 
+    nlDefClassObject <- nimbleListDefClass(types = types, className = name, predefined = predefined, initialValues = initialValueList) 
     basicTypes <- c("double", "integer", "character", "logical")
     nestedListGens <- list()
     for(i in seq_along(types$types)){
@@ -169,28 +176,33 @@ nimbleList <- function(...,
           nonInitializeFields <- which(!(nimListFields %in% names(initializeFields)))
           ## initialize uninitialized fields
           for(i in nonInitializeFields){
-            thisType <- nimbleListDef$types$types[i]
-            thisDim <-  nimbleListDef$types$dims[i]
-            if(thisType == 'character'){
-              initValue  <- ""
+            if(!(length(nimbleListDef$initialValues[[i]]) == 1 && is.na(nimbleListDef$initialValues[[i]]))){
+               initValue <- nimbleListDef$initialValues[[i]]
             }
-            else if(thisType %in% c('integer', 'double')){
-              if(thisDim == 0)
-                initValue <- 0
-              if(thisDim == 1)
-                initValue <- integer(0)
-              if(thisDim == 2)
-                initValue <- matrix(0, 0, 0)
-              if(thisDim > 2)
-                initValue <- array(0, dim = rep(0, thisDim))
+            else{
+              thisType <- nimbleListDef$types$types[i]
+              thisDim <-  nimbleListDef$types$dims[i]
+              if(thisType == 'character'){
+                initValue  <- ""
+              }
+              else if(thisType %in% c('integer', 'double')){
+                if(thisDim == 0)
+                  initValue <- 0
+                if(thisDim == 1)
+                  initValue <- integer(0)
+                if(thisDim == 2)
+                  initValue <- matrix(0, 0, 0)
+                if(thisDim > 2)
+                  initValue <- array(0, dim = rep(0, thisDim))
+              }
+              else if(thisType == 'logical'){
+                initValue <- FALSE
+              }
+              else if(nimListFields[i] %in% names(nestedListGenList)){
+                initValue <- nestedListGenList[[nimListFields[i]]]$new()
+              }
+              else(stop(paste("unrecognized type given for nimbleList element", nimListFields[i])))
             }
-            else if(thisType == 'logical'){
-              initValue <- FALSE
-            }
-            else if(nimListFields[i] %in% names(nestedListGenList)){
-              initValue <- nestedListGenList[[nimListFields[i]]]$new()
-            }
-            else(stop(paste("unrecognized type given for nimbleList element", nimListFields[i])))
             eval(substitute(.self[[nimListFields[i]]] <<-initValue))
           }   
         },
