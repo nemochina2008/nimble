@@ -176,7 +176,8 @@ nimbleList <- function(...,
           nonInitializeFields <- which(!(nimListFields %in% names(initializeFields)))
           ## initialize uninitialized fields
           for(i in nonInitializeFields){
-            if(!(length(nimbleListDef$initialValues[[i]]) == 1 && is.na(nimbleListDef$initialValues[[i]]))){
+            if(!is(nimbleListDef$initialValues[[i]], "refClass") &&
+               !(length(nimbleListDef$initialValues[[i]]) == 1 && is.na(nimbleListDef$initialValues[[i]]))){
                initValue <- nimbleListDef$initialValues[[i]]
             }
             else{
