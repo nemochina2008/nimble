@@ -155,7 +155,10 @@ getMCEMRanges <- nimbleFunction(
 #'
 #' pumpMCEM <- buildMCEM(model = pumpModel, latentNodes = 'theta[1:10]',
 #'                        boxConstraints = box)
-#' pumpMCEM$run(initM = 1000)
+#'                
+#' ## Warning:  running this uncompiled version will take a very long time.                             
+#' ## pumpMCEM$run(initM = 1000)
+#' 
 #' CpumpMCEM <- compileNimble(pumpMCEM, project = pumpModel)  ## This will surely break.
 #' CpumpMCEM$run(1000)
 #' }
@@ -233,15 +236,16 @@ buildMCEM <- nimbleFunction(
   
   
   mcmc_Latent_Conf <- configureMCMC(Rmodel, nodes = latentNodes, monitors = model$getVarNames(), control = mcmcControl) 
-  Rmcmc_Latent <- buildMCMC(mcmc_Latent_Conf)
+  mcmc_Latent <- buildMCMC(mcmc_Latent_Conf)
   sampledMV = Rmcmc_Latent$mvSamples
   mvBlock <- modelValues(Rmodel)
-  Rcalc_E_llk <- calc_E_llk_gen(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvSample = sampledMV)
-  RvarCalc <- calc_asympVar(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvBlock, mvSample = sampledMV, numReps = numReps)
+  calc_E_llk <- calc_E_llk_gen(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvSample = sampledMV)
+  varCalc <- calc_asympVar(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvBlock, mvSample = sampledMV, numReps = numReps)
   
-  cvarCalc <- compileNimble(RvarCalc, project = Rmodel)
-  cmcmc_Latent = compileNimble(Rmcmc_Latent, project = Rmodel)
-  cCalc_E_llk = compileNimble(Rcalc_E_llk, project = Rmodel)    
+  ## These no longer need to be compiled in setup code. 
+  # cvarCalc <- compileNimble(RvarCalc, project = Rmodel)
+  # cmcmc_Latent = compileNimble(Rmcmc_Latent, project = Rmodel)
+  # cCalc_E_llk = compileNimble(Rcalc_E_llk, project = Rmodel)    
   nParams = length(maxNodes)
   },
   run = function(initM = int()){
@@ -278,29 +282,29 @@ buildMCEM <- nimbleFunction(
       acceptCrit <- 0
       #starting sample size calculation for this iteration
       m <- burnIn + ceiling(max(m - burnIn, sigSq*((zAlpha + zBeta)^2)/((diff)^2)))
-      cmcmc_Latent$run(m, reset = TRUE)   #initial mcmc run of size m
+      mcmc_Latent$run(m, reset = TRUE)   #initial mcmc run of size m
       thetaPrev <- theta  #store previous theta value
       itNum <- itNum + 1
       while(acceptCrit == 0){
         if(optimMethod == "L-BFGS-B") {
-         optimOutput = try(optim(par = theta, fn = cCalc_E_llk$run, oldParamValues = thetaPrev,
+         optimOutput = try(optim(par = theta, fn = calc_E_llk$run, oldParamValues = thetaPrev,
                               diff = 0, control = list(fnscale = -1), method = 'L-BFGS-B', 
                               lower = low_limits, upper = hi_limits), silent = TRUE)
         if(inherits(optimOutput, "try-error")) optimMethod = "BFGS"  ## if constraints prevent optim from running, remove constraints. 
                                                                      ## this can happen if bounds are a function of other parameters in the model,
         }
         if(optimMethod == "BFGS")
-          optimOutput = optim(par = theta, fn = cCalc_E_llk$run, oldParamValues = thetaPrev,
+          optimOutput = optim(par = theta, fn = calc_E_llk$run, oldParamValues = thetaPrev,
                               diff = 0, control = list(fnscale = -1), method = 'BFGS')
         
         theta = optimOutput$par    
-        sigSq <- cvarCalc$run(m, theta, thetaPrev) 
+        sigSq <- varCalc$run(m, theta, thetaPrev) 
         ase <- sqrt(sigSq) #asymptotic std. error
-        diff <- cCalc_E_llk$run(theta, thetaPrev, 1)
+        diff <- calc_E_llk$run(theta, thetaPrev, 1)
         if((diff - zAlpha*ase)<0){ #swamped by mc error
           cat("Monte Carlo error too big: increasing MCMC sample size.\n")
           mAdd <- ceiling((m-burnIn)/2)  #from section 2.3, additional mcmc samples will be taken if difference is not great enough
-          cmcmc_Latent$run(mAdd, reset = FALSE)
+          mcmc_Latent$run(mAdd, reset = FALSE)
           m <- m + mAdd
         }
         else{
