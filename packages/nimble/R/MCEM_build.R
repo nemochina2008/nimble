@@ -155,11 +155,14 @@ getMCEMRanges <- nimbleFunction(
 #'
 #' pumpMCEM <- buildMCEM(model = pumpModel, latentNodes = 'theta[1:10]',
 #'                        boxConstraints = box)
-#' pumpMCEM(initM = 1000)
+#' pumpMCEM$run(initM = 1000)
+#' CpumpMCEM <- compileNimble(pumpMCEM, project = pumpModel)  ## This will surely break.
+#' CpumpMCEM$run(1000)
 #' }
 #' # Could also use latentNodes = 'theta' and buildMCEM() would figure out this means 'theta[1:10]'
 #' 
-buildMCEM <- function(model, latentNodes, burnIn = 500 , mcmcControl = list(adaptInterval = 100),
+buildMCEM <- nimbleFunction(
+  setup = function(model, latentNodes, burnIn = 500 , mcmcControl = list(adaptInterval = 100),
                       boxConstraints = list(), buffer = 10^-6, alpha = 0.25, beta = 0.25, 
                       gamma = 0.05, C = 0.001, numReps = 300, verbose = TRUE) {
   latentNodes = model$expandNodeNames(latentNodes)
@@ -240,7 +243,8 @@ buildMCEM <- function(model, latentNodes, burnIn = 500 , mcmcControl = list(adap
   cmcmc_Latent = compileNimble(Rmcmc_Latent, project = Rmodel)
   cCalc_E_llk = compileNimble(Rcalc_E_llk, project = Rmodel)    
   nParams = length(maxNodes)
-  run <- function(initM = 1000){
+  },
+  run = function(initM = int()){
     theta = rep(NA, nParams)
     if(burnIn >= initM)
       stop('mcem quitting: burnIn > initial m value')
@@ -319,8 +323,8 @@ buildMCEM <- function(model, latentNodes, burnIn = 500 , mcmcControl = list(adap
     }
     output = optimOutput$par
     names(output) = maxNodes
+    returnType(double(1))
     return(output)
   }
-  return(run)
-}
+)
 
