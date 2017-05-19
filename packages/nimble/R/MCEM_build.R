@@ -1,7 +1,7 @@
 # asymptotic variance is calculated using the moving-block
 # bootstrap method of "Markov Chain Monte Carlo in Statistical Mechanics"
 # by Mignani & Rosa, 2001 (p. 350)
-calc_asympVar = nimbleFunction(
+calc_asympVar <- nimbleFunction(
   setup = function(model, fixedNodes, sampledNodes, mvBlock, mvSample, burnIn = 0, numReps){
     calc_E_llk <- calc_E_llk_gen(model, fixedNodes = fixedNodes, sampledNodes = sampledNodes, burnIn = 0, mvSample = mvBlock)
   },
@@ -237,7 +237,7 @@ buildMCEM <- nimbleFunction(
   
   mcmc_Latent_Conf <- configureMCMC(Rmodel, nodes = latentNodes, monitors = model$getVarNames(), control = mcmcControl) 
   mcmc_Latent <- buildMCMC(mcmc_Latent_Conf)
-  sampledMV = Rmcmc_Latent$mvSamples
+  sampledMV = mcmc_Latent$mvSamples
   mvBlock <- modelValues(Rmodel)
   calc_E_llk <- calc_E_llk_gen(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvSample = sampledMV)
   varCalc <- calc_asympVar(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvBlock, mvSample = sampledMV, numReps = numReps)
