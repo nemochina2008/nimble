@@ -206,9 +206,9 @@ buildMCEM <- nimbleFunction(
     stop('lower limits greater than or equal to upper limits!')
   
   if(identical(low_limits, rep(-Inf, length(low_limits))) && identical(hi_limits, rep(Inf, length(hi_limits))))
-    optimMethod = "BFGS"
+    optimMethod <- "BFGS"
   else 
-    optimMethod = "L-BFGS-B"
+    optimMethod <- "L-BFGS-B"
 
   if(length(latentNodes) == 0)
     stop('no latentNodes')
@@ -223,7 +223,7 @@ buildMCEM <- nimbleFunction(
       cModel <- compileNimble(model)
     }
     else
-      cModel = model$CobjectInterface
+      cModel <- model$CobjectInterface
   }
   else{
     cModel <- model
@@ -237,7 +237,7 @@ buildMCEM <- nimbleFunction(
   
   mcmc_Latent_Conf <- configureMCMC(Rmodel, nodes = latentNodes, monitors = model$getVarNames(), control = mcmcControl) 
   mcmc_Latent <- buildMCMC(mcmc_Latent_Conf)
-  sampledMV = mcmc_Latent$mvSamples
+  sampledMV <- mcmc_Latent$mvSamples
   mvBlock <- modelValues(Rmodel)
   calc_E_llk <- calc_E_llk_gen(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvSample = sampledMV)
   varCalc <- calc_asympVar(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvBlock, mvSample = sampledMV, numReps = numReps)
@@ -246,13 +246,13 @@ buildMCEM <- nimbleFunction(
   # cvarCalc <- compileNimble(RvarCalc, project = Rmodel)
   # cmcmc_Latent = compileNimble(Rmcmc_Latent, project = Rmodel)
   # cCalc_E_llk = compileNimble(Rcalc_E_llk, project = Rmodel)    
-  nParams = length(maxNodes)
+  nParams <- length(maxNodes)
   },
   run = function(initM = int()){
     theta = rep(NA, nParams)
     if(burnIn >= initM)
       stop('mcem quitting: burnIn > initial m value')
-    cmcmc_Latent$run(1, reset = TRUE)	# To get valid initial values 
+    mcmc_Latent$run(1, reset = TRUE)	# To get valid initial values 
     theta <- values(cModel, maxNodes)
     if(optimMethod == "L-BFGS-B"){
       for(i in seq_along(theta) ) {  # check that initial values satisfy constraints
