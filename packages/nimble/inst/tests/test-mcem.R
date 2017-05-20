@@ -27,7 +27,7 @@ pump <- nimbleModel(code = pumpCode, name = 'pump',
                        inits = pumpInits,
                        check = FALSE)
 
-compileNimble(pump)
+cPump <- compileNimble(pump)
 
 #build an MCEM algorithm with Ascent-based convergence criterion
 pumpMCEM <- buildMCEM(model = pump,
@@ -36,6 +36,9 @@ pumpMCEM <- buildMCEM(model = pump,
                       boxConstraints = list( list( c('alpha', 'beta'),
                                                   limits = c(0, Inf) ) ),
                       C = 0.01, alpha = .01, beta = .01, gamma = .01, buffer = 1e-6)
+
+cPumpMCEM <- compileNimble(pumpMCEM, showCompilerOutput = TRUE)
+
 ## C changed from .001 to .01 to make the test run faster
 ## Correspondingly changed tolerance below from 0.01 to 0.04
 set.seed(0)

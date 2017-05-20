@@ -205,7 +205,7 @@ buildMCEM <- nimbleFunction(
   if(any(low_limits>=hi_limits))
     stop('lower limits greater than or equal to upper limits!')
   
-  if(identical(low_limits, rep(-Inf, length(low_limits))) && identical(hi_limits, rep(Inf, length(hi_limits))))
+  if(max(low_limits) == -Inf & min(low_limits) == Inf)
     optimMethod <- "BFGS"
   else 
     optimMethod <- "L-BFGS-B"
@@ -229,6 +229,7 @@ buildMCEM <- nimbleFunction(
     cModel <- model
     Rmodel <- model$Rmodel
   }
+  nodesToSimulate <- cModel$getDependencies(maxNodes, self = FALSE)
   
   zAlpha <- qnorm(alpha, 0, 1, lower.tail=FALSE)
   zBeta <- qnorm(beta, 0, 1, lower.tail=FALSE)
@@ -256,21 +257,20 @@ buildMCEM <- nimbleFunction(
     theta <- values(cModel, maxNodes)
     if(optimMethod == "L-BFGS-B"){
       for(i in seq_along(theta) ) {  # check that initial values satisfy constraints
-        if(identical(low_limits[i], -Inf) && (hi_limits[i] < Inf)){
-          if(theta[i] > hi_limits[i])
-            theta[i] <- hi_limits[i] - 1
-        }
-        else if(identical(hi_limits[i], Inf) && (low_limits[i] > -Inf)){
-          if(theta[i] < low_limits[i])
+        if(!(low_limits[i] <= theta[i] & theta[i] <= hi_limits[i])){
+          if(hi_limits[i] < Inf) {
+            if(low_limits[i] > -Inf) {
+              theta[i] <- (low_limits[i] + hi_limits[i]) / 2
+            } else {
+              theta[i] <- hi_limits[i] - 1
+            }
+          } else {
             theta[i] <- low_limits[i] + 1
-        }
-        else if((low_limits[i] > -Inf) && (hi_limits[i] < Inf)){
-          if(!(theta[i] >= low_limits[i] & theta[i] <= hi_limits[i]) )
-            theta[i] = (low_limits[i] + hi_limits[i])/2	
+          }
         }
       }
       values(cModel, maxNodes) <<- theta
-      simulate(cModel, cModel$getDependencies(maxNodes, self = FALSE))
+      simulate(cModel, nodesToSimulate)
     }
     
     m <- initM 
@@ -286,17 +286,17 @@ buildMCEM <- nimbleFunction(
       thetaPrev <- theta  #store previous theta value
       itNum <- itNum + 1
       while(acceptCrit == 0){
-        if(optimMethod == "L-BFGS-B") {
-         optimOutput = try(optim(par = theta, fn = calc_E_llk$run, oldParamValues = thetaPrev,
+        ## If constraints prevent optim from running, ignore constraints. 
+        ## This can happen if bounds are a function of other parameters in the model.
+        slack <- min(min(par - low_limits), min(hi_limits - par))
+        if(optimMethod == "L-BFGS-B" & slack > 0) {
+          optimOutput = optim(par = theta, fn = calc_E_llk$run, oldParamValues = thetaPrev,
                               diff = 0, control = list(fnscale = -1), method = 'L-BFGS-B', 
-                              lower = low_limits, upper = hi_limits), silent = TRUE)
-        if(inherits(optimOutput, "try-error")) optimMethod = "BFGS"  ## if constraints prevent optim from running, remove constraints. 
-                                                                     ## this can happen if bounds are a function of other parameters in the model,
-        }
-        if(optimMethod == "BFGS")
+                              lower = low_limits, upper = hi_limits)
+        } else {
           optimOutput = optim(par = theta, fn = calc_E_llk$run, oldParamValues = thetaPrev,
                               diff = 0, control = list(fnscale = -1), method = 'BFGS')
-        
+        }
         theta = optimOutput$par    
         sigSq <- varCalc$run(m, theta, thetaPrev) 
         ase <- sqrt(sigSq) #asymptotic std. error
@@ -317,7 +317,8 @@ buildMCEM <- nimbleFunction(
             cat("Iteration Number: ", itNum, ".\n", sep = "")
             cat("Current number of MCMC iterations: ", m, ".\n", sep = "")
             output = optimOutput$par
-            names(output) = maxNodes
+            ## Compiler cannot handle `names`:
+            ## names(output) = maxNodes
             cat("Parameter Estimates: \n", sep = "")
             print(output)
             cat("Convergence Criterion: ", endCrit, ".\n", sep = "")
@@ -326,7 +327,8 @@ buildMCEM <- nimbleFunction(
       }
     }
     output = optimOutput$par
-    names(output) = maxNodes
+    ## Compiler cannot handle `names`:
+    ## names(output) = maxNodes
     returnType(double(1))
     return(output)
   }
