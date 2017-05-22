@@ -33,10 +33,31 @@ struct graphNode {
   void addParent(graphNode *fromNode);
 };
 
+// add struct nimbleGraphMaps with
+// graphID_2_declID
+// graphID_2_unrolledIndicesMatrixRow
+// 
+// for runtime dependencies
+struct nimbleGraphMaps {
+public:
+  vector<int> graphCID_2_declCID_data;
+  vector<int> graphCID_2_declCID(const vector<int> &graphCID) const;
+  vector<int> graphCID_2_unrolledIndicesMatrixCRow_data;
+  vector<int> graphCID_2_unrolledIndicesMatrixCRow(const vector<int> &graphCID) const;
+};
+
 struct nimbleGraph {
 public:
+  // original data for static dependencies
   vector<graphNode*> graphNodeVec;
   unsigned int numNodes;
+
+  // additional data for runtime dependencies
+  nimbleGraphMaps maps;
+  
+  // original methods
+  void setMaps(const vector<int> &graphCID_2_declID,
+	       const vector<int> &graphCID_2_unrolledIndicesMatrixRow);
   void setNodes(const vector<int> &edgesFrom, const vector<int> &edgesTo,
 		const vector<int> &edgesFrom2ParentExprIDs,
 		const vector<int> &nodeFunctionIDs,
@@ -56,7 +77,13 @@ public:
 void nimbleGraphFinalizer(SEXP SgraphExtPtr);
 
 extern "C" {
-  SEXP setGraph(SEXP SedgesFrom, SEXP SedgesTo, SEXP SedgesFrom2ParentExprIDs, SEXP SnodeFunctionIDs, SEXP Stypes, SEXP Snames, SEXP SnumNodes);
+  SEXP setGraph(SEXP SedgesFrom, SEXP SedgesTo,
+		SEXP SedgesFrom2ParentExprIDs, SEXP SnodeFunctionIDs,
+		SEXP Stypes, SEXP Snames, SEXP SnumNodes);
+  SEXP setGraph2(SEXP SedgesFrom, SEXP SedgesTo,
+		 SEXP SedgesFrom2ParentExprIDs, SEXP SnodeFunctionIDs,
+		 SEXP Stypes, SEXP Snames, SEXP SnumNodes,
+		 SEXP SgraphID_2_declID, SEXP SgraphID_2_unrolledIndicesMatrixRow);
   SEXP anyStochDependencies(SEXP SextPtr);
   SEXP anyStochParents(SEXP SextPtr);
   SEXP getDependencies(SEXP SextPtr, SEXP Snodes, SEXP Somit, SEXP Sdownstream);

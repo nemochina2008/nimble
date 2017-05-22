@@ -118,11 +118,22 @@ populateNodeFxnVec <- function(fxnPtr, Robject, fxnVecName, dll){
 
 populateNodeFxnVecNew <- function(fxnPtr, Robject, fxnVecName, dll){
     fxnVecPtr <- getNamedObjected(fxnPtr, fxnVecName, dll = dll)
+    ## check if we are allowing runtime dependencies
+    ## if so, we can't get the declIDs and rowIndices here
+    ## we just pass in the initiating IDs
+    
+
+    ## (old processing) static case
     indexingInfo <- Robject[[fxnVecName]]$indexingInfo
     declIDs <- indexingInfo$declIDs
     rowIndices <- indexingInfo$unrolledIndicesMatrixRows
     if(is.null(Robject[[fxnVecName]]$model$CobjectInterface) || inherits(Robject[[fxnVecName]]$model$CobjectInterface, 'uninitializedField'))
         stop("populateNodeFxnVecNew: error in accessing compiled model; perhaps you did not compile the model used by your nimbleFunction along with or before this compilation of the nimbleFunction?")
+    ## put .nodeFxnPointers_byDeclID and
+    ##declIDs <- maps$graphID_2_declID[graphIDs]
+    ##rowIndices <- maps$graphID_2_unrolledIndicesMatrixRow[graphIDs]
+    ## into C++ graph
+
     numberedPtrs <- Robject[[fxnVecName]]$model$CobjectInterface$.nodeFxnPointers_byDeclID$.ptr
     
     ## This is not really the most efficient way to do things; eventually 

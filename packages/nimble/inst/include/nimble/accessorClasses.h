@@ -42,11 +42,36 @@ class oneNodeUseInfo {
   }
 };
 
+enum NODEVECTORTYPE {STATIC, RUNTIME};
+
 class NodeVectorClassNew {
  public:
+  // new pieces for runtime dependencies
+  NODEVECTORTYPE nodeFxnVectorType;  // STATIC vs. RUNTIME
+  vector<int> graphIDs;              // for RUNTIME: input to getDependencies
+  vector<int> omitIDs;               //   "
+  nimbleGraph* graph;                // for RUNTIME: graph for calling getDependencies
+  // original component, for static case
   vector<oneNodeUseInfo> useInfoVec;
   vector<oneNodeUseInfo> &getUseInfoVec() {return(useInfoVec);}
 };
+
+NodeVectorClassNew &getNodes(NodeVectorClassNew &input) {
+  // When adding runtime dependencies, we added this layer
+  // previous calculate(NodeVectorClassNew) will now be calculate(getNodes(NodeVectorClassNew))
+  // This new layer, getNodes, will determine what to do based on NODEVECTORTYPE
+  // This need could lend itself to a class hierarchy for NodeVectorClassNew,
+  // but for initial setup of runtime dependencies we are not doing that
+  // partly to wait and see what needs emerge and partly because pointers get cleansed of
+  // types when going back and forth to R, so class hierarchices require additional bookkeeping.
+  if(input.nodeFxnVectorType == STATIC) return(input);
+  // imitate step of SEXP getDependencies
+  vector<int> depNodes = input.graph->getDependencies(input.graphIDs, input.omitIDs, false);
+  // imitate steps of nodeFunctionVector (R) -> model$modelDef$graphIDs2indexedNodeInfo(temp_gids)
+  //    and SEXP populateNodeFxnVector_declIDs
+  
+}
+
 
 ///// Using NodeVectors:
 // utilities for calling node functions from a vector of node pointers

@@ -4,7 +4,7 @@ nimbleGraphClass <- setRefClass(
         graphExtPtr = 'ANY'
     ),
     methods = list(
-        setGraph = function(edgesFrom, edgesTo, edgesFrom2ParentExprIDs, nodeFunctionIDs, types, names, numNodes) {
+        setGraph = function(edgesFrom, edgesTo, edgesFrom2ParentExprIDs, nodeFunctionIDs, types, names, numNodes, graphID_2_declID, graphID_2_unrolledIndicesMatrixRow ) {
             edgesFrom2ParentExprIDs[ is.na(edgesFrom2ParentExprIDs) ] <- 0
             for(i in list(edgesFrom, edgesTo, edgesFrom2ParentExprIDs, numNodes)) {
                 if(length(i) > 0) {
@@ -18,7 +18,13 @@ nimbleGraphClass <- setRefClass(
             ## But on the C++ side we need these IDs to be self, so there is something valid.
             boolZero <- nodeFunctionIDs == 0
             nodeFunctionIDs[boolZero] <- (1:length(nodeFunctionIDs))[boolZero]
-            graphExtPtr <<- .Call('setGraph', edgesFrom, edgesTo, edgesFrom2ParentExprIDs, nodeFunctionIDs, types, names, numNodes)
+            if(!nimbleOptions()$expandedCppGraph) {
+                ## old
+                graphExtPtr <<- .Call('setGraph', edgesFrom, edgesTo, edgesFrom2ParentExprIDs, nodeFunctionIDs, types, names, numNodes)
+            } else {
+                ## new
+                graphExtPtr <<- .Call('setGraph2', edgesFrom, edgesTo, edgesFrom2ParentExprIDs, nodeFunctionIDs, types, names, numNodes, graphID_2_declID, graphID_2_unrolledIndicesMatrixRow)
+            }
         },
         anyStochDependencies = function() {
            .Call("anyStochDependencies",graphExtPtr)

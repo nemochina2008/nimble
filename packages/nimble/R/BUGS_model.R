@@ -642,17 +642,6 @@ returnScalar Componenets: Logical argument specifying whether multivariate nodes
 Details: The downward search for dependent nodes propagates through deterministic nodes, but by default will halt at the first level of stochastic nodes encountered.
 '
                                       if(inherits(nodes, 'character')) {
-                                          ## elementIDs <- modelDef$nodeName2GraphIDs(nodes, !returnScalarComponents)
-                                          ## if(returnScalarComponents)
-                                          ##    # nodeIDs <- .Internal(unique(modelDef$maps$elementID_2_vertexID[elementIDs],     ## turn into IDs in the graph
-                                          ##     nodeIDs <- unique(modelDef$maps$elementID_2_vertexID[elementIDs],     ## turn into IDs in the graph
-                                          ##                          FALSE,
-                                          ##                          FALSE,
-                                          ##                          NA)
-                                          ## else
-                                          ##     nodeIDs <- elementIDs
-
-                                          ## experimental: always start from scalar components
                                           elementIDs <- modelDef$nodeName2GraphIDs(nodes, FALSE)
                                           nodeIDs <- unique(modelDef$maps$elementID_2_vertexID[elementIDs],     ## turn into IDs in the graph
                                                             FALSE,
@@ -661,16 +650,10 @@ Details: The downward search for dependent nodes propagates through deterministi
                                       }
                                       else if(inherits(nodes, 'numeric'))
                                           nodeIDs <- nodes
-                                      
+
+if(isTRUE(nimbleOptions()$forceRuntimeDependencies)) return(structure(nodeIDs, depType = "runTime"))
+
                                       if(inherits(omit, 'character')) { ## mimic above if it works
-                                      ##     elementIDs <- modelDef$nodeName2GraphIDs(omit, !returnScalarComponents)
-                                      ##     if(returnScalarComponents)
-                                      ##         omitIDs <- unique(modelDef$maps$elementID_2_vertexID[elementIDs],
-                                      ##                              FALSE,
-                                      ##                              FALSE,
-                                      ##                              NA)
-                                      ##     else
-                                      ##         omitIDs <- elementIDs
                                           elementIDs <- modelDef$nodeName2GraphIDs(omit, FALSE)
                                           omitIDs <- unique(modelDef$maps$elementID_2_vertexID[elementIDs],     ## turn into IDs in the graph
                                                             FALSE,
