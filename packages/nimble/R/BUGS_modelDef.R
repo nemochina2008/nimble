@@ -129,6 +129,7 @@ modelDefClass <- setRefClass('modelDefClass',
 modelDefClass$methods(setupModel = function(code, constants, dimensions, userEnv, debug = FALSE) {
     if(debug) browser()
     code <- codeProcessIfThenElse(code, constants, userEnv) ## evaluate definition-time if-then-else
+    if(nimbleOptions()$enableBUGSmodules) code <- codeProcessBUGSmodules(code)
     setModelValuesClassName()         ## uses 'name' field to set field: modelValuesClassName
     assignBUGScode(code)              ## uses 'code' argument, assigns field: BUGScode.  puts codes through nf_changeNimKeywords
     assignConstants(constants)        ## uses 'constants' argument, sets fields: constantsEnv, constantsList, constantsNamesList
@@ -190,6 +191,22 @@ codeProcessIfThenElse <- function(code, constants, envir = parent.frame()) {
             return(code)
     else
         return(code)
+}
+
+codeProcessBUGSmodules <- function(code, constants, envir = parent.frame()) {
+    codeLength <- length(code)
+    if(code[[1]] == '{') {
+        if(codeLength > 1) for(i in 2:codeLength) code[[i]] <- codeProcessBUGSmodules(code[[i]], constants, envir)
+        return(code)
+    } 
+    if(code[[1]] == 'for') {
+        code[[4]] <- codeProcessBUGSmodules(code[[4]], constants, envir)
+        return(code)
+    }
+    if(identical(code[[1]], '~')) {
+        possibleModuleName <- code[[3]][[1]]
+        
+    }
 }
 
 modelDefClass$methods(setModelValuesClassName = function() {
