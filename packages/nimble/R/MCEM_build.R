@@ -1,7 +1,7 @@
 # asymptotic variance is calculated using the moving-block
 # bootstrap method of "Markov Chain Monte Carlo in Statistical Mechanics"
 # by Mignani & Rosa, 2001 (p. 350)
-calc_asympVar <- nimbleFunction(
+calc_asympVar = nimbleFunction(
   setup = function(model, fixedNodes, sampledNodes, mvBlock, mvSample, burnIn = 0, numReps){
     calc_E_llk <- calc_E_llk_gen(model, fixedNodes = fixedNodes, sampledNodes = sampledNodes, burnIn = 0, mvSample = mvBlock)
   },
@@ -68,6 +68,10 @@ calc_E_llk_gen = nimbleFunction(
         mean_LL = mean_LL - sample_LL
       }
     }
+    values(model, fixedNodes) <<- paramValues  #first use new params, then old ones
+    if(areFixedDetermNodes){
+      simulate(model, paramDepDetermNodes_fixed)  #	Fills in the deterministic nodes
+    }
     mean_LL <- mean_LL / nSamples
     if(is.nan(mean_LL)){
       mean_LL = -Inf	
@@ -111,22 +115,41 @@ getMCEMRanges <- nimbleFunction(
 #' @param numReps number of bootstrap samples to use for asymptotic variance calculation. 
 #' @param verbose logical indicating whether to print additional logging information
 #' 
-#'  @author Clifford Anderson-Bergman and Nicholas Michaud
+#' @author Clifford Anderson-Bergman and Nicholas Michaud
 #' @export
 #' @details \code{buildMCEM} calls the NIMBLE compiler to create the MCMC and objective function as nimbleFunctions.  If the given model has already been used in compiling other nimbleFunctions, it is possible you will need to create a new copy of the model for buildMCEM to use.
 #' Uses an ascent-based MCEM algorithm, which includes rules for automatically increasing the number of MC samples as iterations increase, and for determining when convergence has been reached.  Constraints for parameter values can be provided.  If contstraints are not provided, they will be automatically determined by NIMBLE.
 #' @return
-#' an R function that when called runs the MCEM algorithm. The function returned takes the arguments listed in Runtime Arguments.
+#' an R list with two elements:
+#' \itemize{
+#' \item{\code{run}} {A function that when called runs the MCEM algorithm. This function takes the arguments listed in \code{run} Arguments below.}
+#' \item{\code{estimateCov}} {An experimental function that when called estimates the asymptotic covariance of the parameters.  The covariance is estimated using the method of Louis (1982).
+#' This function takes the arguments listed in \code{estimateCov} Arguments below.}
+#' }
 #'
 #'
-#' @section Runtime Arguments:
+#' @section \code{run} Arguments:
 #'	\itemize{
 #'	\item{\code{initM}}	{
 #'    starting number of iterations for the algorithm.
 #'	}
 #'  }
-#' @references Caffo, Brian S., Wolfgang Jank, and Galin L. Jones. "Ascent-based Monte Carlo expectation-maximization."
-#'  Journal of the Royal Statistical Society: Series B (Statistical Methodology) 67.2 (2005): 235-251.
+#' @section \code{estimateCov} Arguments:
+#'  \itemize{
+#'  \item{\code{MLEs}}{
+#'    named vector of MLE values.  Must have a named MLE value for each stochastic, non-data, non-latent node.  If the \code{run()} method has alread been called,
+#'    MLEs do not need to be provided.
+#'  } 
+#'  \item{\code{useExistingSamples}}{
+#'    logical argument.  If \code{TRUE} and the \code{run()} method has previously been called, the covariance estimation will use MCMC samples from the last step of the MCEM algorithm.
+#'    Otherwise, an MCMC algorithm will be run for 10,000 iterations, and those samples will be used.  Defaults to \code{FALSE}.
+#'  }
+#'  } 
+#' @references 
+#' 
+#' Caffo, Brian S., Wolfgang Jank, and Galin L. Jones (2005). Ascent-based Monte Carlo expectation-maximization.  \emph{Journal of the Royal Statistical Society: Series B (Statistical Methodology)}, 67(2), 235-251.
+#'  
+#'  Louis, Thomas A  (1982). Finding the Observed Information Matrix When Using the EM Algorithm. \emph{Journal of the Royal Statistical Society. Series B (Statistical Methodology)}, 44(2), 226-233. 
 #' @examples
 #' \dontrun{
 #' pumpCode <- nimbleCode({ 
@@ -159,19 +182,22 @@ getMCEMRanges <- nimbleFunction(
 #' ## Warning:  running this uncompiled version will take a very long time.                             
 #' ## pumpMCEM$run(initM = 1000)
 #' 
-#' CpumpMCEM <- compileNimble(pumpMCEM, project = pumpModel)  ## This will surely break.
-#' CpumpMCEM$run(1000)
+#' cPumpMCEM <- compileNimble(pumpMCEM, project = pumpModel)  ## This will surely break.
+#' cPumpMCEM$run(1000)
+#'
+#' MLEs <- cPumpMCEM$run(initM = 1000)
+#' cov <- cPumpMCEM$estimateCov()
 #' }
 #' # Could also use latentNodes = 'theta' and buildMCEM() would figure out this means 'theta[1:10]'
 #' 
 buildMCEM <- nimbleFunction(
-  setup = function(model, latentNodes, burnIn = 500 , mcmcControl = list(adaptInterval = 100),
+  setup = function(model, latentNodes, getAsympCov = TRUE, burnIn = 500 , mcmcControl = list(adaptInterval = 100),
                       boxConstraints = list(), buffer = 10^-6, alpha = 0.25, beta = 0.25, 
                       gamma = 0.05, C = 0.001, numReps = 300, verbose = TRUE) {
   latentNodes = model$expandNodeNames(latentNodes)
   latentNodes <- intersect(latentNodes, model$getNodeNames(stochOnly = TRUE))
+  dataNodes <- model$getNodeNames(dataOnly = TRUE)
   allStochNonDataNodes = model$getNodeNames(includeData = FALSE, stochOnly = TRUE)
-  
   if(buffer == 0)
     cat("warning: buffer 0. Can cause problems if the likelihood function is degenerate on boundary")
   if(buffer < 0)
@@ -184,7 +210,11 @@ buildMCEM <- nimbleFunction(
   limits <- getMCEMRanges(model, maxNodes, buffer)
   low_limits = limits[[1]]
   hi_limits  = limits[[2]]
-
+  
+  ## will be assign()'ed from within run() for use in getAsymptoticCov
+  paramMLEs <- NA
+  mcmcIters <- NA
+  
   constraintNames = list()
   for(i in seq_along(boxConstraints) )
     constraintNames[[i]] = model$expandNodeNames(boxConstraints[[i]][[1]])
@@ -230,7 +260,8 @@ buildMCEM <- nimbleFunction(
     Rmodel <- model$Rmodel
   }
   nodesToSimulate <- cModel$getDependencies(maxNodes, self = FALSE)
-  
+  nodesToCalculuate <- cModel$getDependencies(maxNodes)
+
   zAlpha <- qnorm(alpha, 0, 1, lower.tail=FALSE)
   zBeta <- qnorm(beta, 0, 1, lower.tail=FALSE)
   zGamma <- qnorm(gamma, 0, 1, lower.tail=FALSE)
@@ -242,13 +273,17 @@ buildMCEM <- nimbleFunction(
   mvBlock <- modelValues(Rmodel)
   calc_E_llk <- calc_E_llk_gen(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvSample = sampledMV)
   varCalc <- calc_asympVar(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvBlock, mvSample = sampledMV, numReps = numReps)
+  getCov <- bootstrapGetCov(model, fixedNodes = maxNodes, sampledNodes = latentNodes, burnIn = burnIn, mvSample = sampledMV)
   
-  ## These no longer need to be compiled in setup code. 
-  # cvarCalc <- compileNimble(RvarCalc, project = Rmodel)
+  ## These no longer need to be compiled in setup code.
   # cmcmc_Latent = compileNimble(Rmcmc_Latent, project = Rmodel)
-  # cCalc_E_llk = compileNimble(Rcalc_E_llk, project = Rmodel)    
+  # cGetCov = compileNimble(RgetCov, project = Rmodel)
+  # cvarCalc <- compileNimble(RvarCalc, project = Rmodel)
+  # cCalc_E_llk = compileNimble(Rcalc_E_llk, project = Rmodel)  
+  
   nParams <- length(maxNodes)
   },
+
   run = function(initM = int()){
     theta = rep(NA, nParams)
     if(burnIn >= initM)
@@ -289,14 +324,17 @@ buildMCEM <- nimbleFunction(
         ## If constraints prevent optim from running, ignore constraints. 
         ## This can happen if bounds are a function of other parameters in the model.
         slack <- min(min(par - low_limits), min(hi_limits - par))
+        control <- optimDefaultControl()
+        control$fnscale <- -1
         if(optimMethod == "L-BFGS-B" & slack > 0) {
           optimOutput = optim(par = theta, fn = calc_E_llk$run, oldParamValues = thetaPrev,
-                              diff = 0, control = list(fnscale = -1), method = 'L-BFGS-B', 
+                              diff = 0, control = control, method = 'L-BFGS-B', 
                               lower = low_limits, upper = hi_limits)
         } else {
           optimOutput = optim(par = theta, fn = calc_E_llk$run, oldParamValues = thetaPrev,
-                              diff = 0, control = list(fnscale = -1), method = 'BFGS')
+                              diff = 0, control = control, method = 'BFGS')
         }
+        
         theta = optimOutput$par    
         sigSq <- varCalc$run(m, theta, thetaPrev) 
         ase <- sqrt(sigSq) #asymptotic std. error
@@ -331,6 +369,153 @@ buildMCEM <- nimbleFunction(
     ## names(output) = maxNodes
     returnType(double(1))
     return(output)
-  }
+  },
+  ## The compiler cannot handle most of this function.
+  ## sort, names, paste, unname, as.matrix, warning, colnames, rownames
+  methods = list(
+  ## This should have default values: MLEs = NA, useExistingSamples = FALSE
+  estimateCov = function(MLEs = double(1), useExistingSamples = logical(0)){
+    stop('TODO revise this function to be compilable')
+    delta <- .0001
+    if(!(length(MLEs) == 1 & is.na(MLEs))){
+      ## Compiler cannot handle is.numeric:
+      ## if(!is.numeric(MLEs)) stop("MLEs argument must be numeric.")
+      if(!all(sort(names(MLEs)) == sort(maxNodes))){
+        stop(paste('MLEs argument must be a named vector with MLEs for all of the following parameters: ', paste(maxNodes, collapse = ", ")))
+      }
+      covMLEs <- unname(MLEs[maxNodes])
+    }
+    else{
+      if(length(paramMLEs) == 1 & is.na(paramMLEs)){
+        stop(paste('No MLEs argument was provided, and the run() method has not been called yet.  Please call the run() method first or provide a named vector of MLEs.'))
+      }
+      else{
+        covMLEs <- unname(paramMLEs)
+      }
+    }
+    if(dim(as.matrix(cmcmc_Latent$mvSamples))[1]<2){
+      if(useExistingSamples == TRUE){
+        warning('MCMC over latent states has not been run yet, cannot have useExistingSamples = TRUE')
+        useExistingSamples <- FALSE
+      }
+    }
+    values(cModel, maxNodes) <- covMLEs
+    calculate(cModel, nodesToCalculate)
+    if(!useExistingSamples){
+      if(is.na(mcmcIters)) mcmcIters <- 20000
+      cmcmc_Latent$run(mcmcIters)
+    }
+    FIM <- getCov$run(covMLEs, delta)
+    cov <- solve(FIM)
+    colnames(cov) <- maxNodes
+    rownames(cov) <- maxNodes
+    return(cov)
+    returnType(double(2))
+  })
 )
 
+bootstrapGetCov <- nimbleFunction(
+    setup = function(model, fixedNodes, sampledNodes, mvSample, burnIn = 0){
+      fixedCalcNodes <- model$getDependencies(fixedNodes)	
+      latentCalcNodes <- model$getDependencies(sampledNodes)
+      paramDepDetermNodes_fixed <- model$getDependencies(fixedNodes, determOnly = TRUE) 
+      paramDepDetermNodes_latent <- model$getDependencies(latentCalcNodes, determOnly = TRUE) 
+      areFixedDetermNodes <- length(paramDepDetermNodes_fixed) > 0
+      areLatentDetermNodes <- length(paramDepDetermNodes_latent) > 0
+    },
+  run = function(theta = double(1), delta = double(0)){
+    nSamples <- getsize(mvSample)
+    paramLengths <- length(theta)
+    fxph <- numeric(paramLengths)
+    fxmh <- numeric(paramLengths)
+    grad <- numeric(paramLengths)
+    derivxy <- matrix(0, nrow = paramLengths, ncol = paramLengths)
+    meanGrad <- numeric(paramLengths)
+    meanGradGrad <-  matrix(0, nrow = paramLengths, ncol = paramLengths)
+    meanDerivxy <- matrix(0, nrow = paramLengths, ncol = paramLengths)
+    for(i in (burnIn+1):nSamples){
+      values(model, fixedNodes) <<- theta
+      if(areFixedDetermNodes){
+        simulate(model, paramDepDetermNodes_fixed)  
+      }
+      if(areLatentDetermNodes){
+        simulate(model, paramDepDetermNodes_latent)
+      }
+      nimCopy(from = mvSample, to = model, nodes = sampledNodes, row = i)
+      if(areFixedDetermNodes){
+        simulate(model, paramDepDetermNodes_fixed) 
+      }
+      if(areLatentDetermNodes){
+        simulate(model, paramDepDetermNodes_latent)	
+      }
+      origValue <- calculate(model, latentCalcNodes)
+      for(iNode in 1:paramLengths){
+        theta[iNode] <- theta[iNode] + delta
+        values(model, fixedNodes) <<- theta 
+        if(areFixedDetermNodes){
+          simulate(model, paramDepDetermNodes_fixed)  
+        }
+        if(areLatentDetermNodes){
+          simulate(model, paramDepDetermNodes_latent)	
+        }
+        fxph[iNode] <- calculate(model, latentCalcNodes)
+        theta[iNode] <- theta[iNode] - 2*delta
+        values(model, fixedNodes) <<- theta 
+        if(areFixedDetermNodes){
+          simulate(model, paramDepDetermNodes_fixed)  
+        }
+        if(areLatentDetermNodes){
+          simulate(model, paramDepDetermNodes_latent)
+        }
+        fxmh[iNode] <- calculate(model, latentCalcNodes)
+        grad[iNode] <- (fxph[iNode] - fxmh[iNode])/(2*delta)
+        theta[iNode] <- theta[iNode] + delta
+        derivxy[iNode, iNode] <- (fxph[iNode] -2*origValue + fxmh[iNode])/(delta^2)
+      }
+      for(iNode in 1:paramLengths){
+        if(iNode != paramLengths){
+          for(jNode in (iNode+1):paramLengths){
+            theta[iNode] <- theta[iNode] + delta
+            theta[jNode] <- theta[jNode] + delta
+            values(model, fixedNodes) <<- theta 
+            if(areFixedDetermNodes){
+              simulate(model, paramDepDetermNodes_fixed) 
+            }
+            if(areLatentDetermNodes){
+              simulate(model, paramDepDetermNodes_latent)	
+            }
+            fxyph <- calculate(model, latentCalcNodes)
+            theta[iNode] <- theta[iNode] - 2*delta
+            theta[jNode] <- theta[jNode] - 2*delta
+            values(model, fixedNodes) <<- theta
+            if(areFixedDetermNodes){
+              simulate(model, paramDepDetermNodes_fixed) 
+            }
+            if(areLatentDetermNodes){
+              simulate(model, paramDepDetermNodes_latent)
+            }
+            fxymh <- calculate(model, latentCalcNodes)
+            derivxy[iNode, jNode] <- (fxyph - fxph[iNode] - fxph[jNode] + 2*origValue - fxmh[iNode] - fxmh[jNode] + fxymh)/(2*delta^2)
+            theta[iNode] <- theta[iNode] + delta
+            theta[jNode] <- theta[jNode] + delta
+          }
+        }
+      }
+      meanGrad <- meanGrad + grad
+      meanDerivxy <- meanDerivxy + derivxy
+      meanGradGrad <- meanGradGrad + (grad%*%t(grad))
+    }
+    meanGrad <- meanGrad / (nSamples - burnIn)
+    meanDerivxy <- meanDerivxy /  (nSamples - burnIn)
+    meanGradGrad <- meanGradGrad /  (nSamples - burnIn)
+    for(iNode in 1:paramLengths){
+      if(iNode != paramLengths){
+        for(jNode in (iNode+1):paramLengths){
+          meanDerivxy[jNode, iNode] <- meanDerivxy[iNode, jNode] ## smarter way to do this with matrix mult?
+        }
+      }
+    }
+    returnType(double(2))
+    returnMat <- -meanDerivxy - meanGradGrad +(meanGrad%*%t(meanGrad))
+    return(returnMat)
+  },where = getLoadingNamespace())
