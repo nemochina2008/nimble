@@ -37,6 +37,7 @@ Collate:
     BUGS_nimbleGraph.R
     BUGS_modelDef.R
     BUGS_model.R
+    BUGS_modules.R
     BUGS_graphNodeMaps.R
     BUGS_readBUGS.R
     BUGS_testBUGS.R

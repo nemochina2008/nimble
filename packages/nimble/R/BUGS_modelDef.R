@@ -203,10 +203,17 @@ codeProcessBUGSmodules <- function(code, constants, envir = parent.frame()) {
         code[[4]] <- codeProcessBUGSmodules(code[[4]], constants, envir)
         return(code)
     }
-    if(identical(code[[1]], '~')) {
-        possibleModuleName <- code[[3]][[1]]
-        
+    possibleModuleName <- deparse(code[[3]][[1]])
+    if(exists(possibleModuleName)) { ## may need to provide an envir argument
+        possibleModule <- get(possibleModuleName) ## ditto
+        if(inherits(possibleModule, "BUGSmodule")) {
+            expandedInfo <- possibleModule$process(code[[2]], code[[3]])
+            ## possibly extract other content in the future
+            recursedNewCode <- codeProcessBUGSmodules(expandedInfo$code)
+            return(recursedNewCode)
+        }
     }
+    code
 }
 
 modelDefClass$methods(setModelValuesClassName = function() {
