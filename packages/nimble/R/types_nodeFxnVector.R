@@ -9,16 +9,19 @@ nodeFunctionVector <- setRefClass(
     fields = list(
         model = 'ANY',
         gids = 'ANY',
-        indexingInfo = 'ANY'
+        indexingInfo = 'ANY',
+        type = 'ANY'
                   ),
                #   nodes = 'ANY'),
                #   nodeFunctionRefClassObjects = 'ANY'),
     methods = list(
         initialize = function(model, nodeNames, excludeData = FALSE, sortUnique = TRUE, errorContext = "") { ##env = parent.frame()) {
             model <<- model
+            type <<- 'static'
             if(isTRUE(nimbleOptions()$forceRuntimeDependencies)) {
                 gids <<- nodeNames
                 indexingInfo <<- NULL
+                type <<- 'runtime'
                 return(NULL)
             }
             if(length(nodeNames) == 0) {

@@ -48,6 +48,7 @@ R_CallMethodDef CallEntries[] = {
   FUN(varAndIndices2mapParts, 3),
   FUN(var2mapParts, 3),
   FUN(populateNodeFxnVector_byGID, 3),
+  FUN(populateNodeFxnVectorNew_dynamicDeps, 4),
   FUN(populateNodeFxnVectorNew_byDeclID, 4),
   FUN(populateIndexedNodeInfoTable, 2),
   FUN(populateValueMapAccessorsFromNodeNames, 4),

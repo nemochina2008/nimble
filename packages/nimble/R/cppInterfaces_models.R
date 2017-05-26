@@ -114,7 +114,10 @@ CmodelBaseClass <- setRefClass('CmodelBaseClass',
                                        nodes <<- nodesEnv
                                        names(nodeFunctions) <<- names(Rmodel$nodeFunctions)
                                        
-                                       .nodeFxnPointers_byDeclID <<- new('numberedObjects', dll = dll) 
+                                       .nodeFxnPointers_byDeclID <<- new('numberedObjects', dll = dll)
+                                       if(nimbleOptions()$enableRuntimeDependencies) {
+                                           modelDef$maps$nimbleGraph$addCompiledModelInfo( .self )
+                                       }
                                        maxID = length(modelDef$declInfo)
                                        .nodeFxnPointers_byDeclID$resize(maxID)
 

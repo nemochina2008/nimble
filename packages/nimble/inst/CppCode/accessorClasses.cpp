@@ -41,6 +41,51 @@ NimArr<2, double> getBound_2D_double(int boundID, const oneNodeUseInfo &useInfo,
   return(useInfo.nodeFunPtr->getBound_2D_double_block(boundID, useInfo.useInfo));
 }
 
+int op_decrease (int i) { return --i; }
+
+template<class T> /* support int* and std::vector<int> */
+void NodeVectorClassNew::populateUseInfoVec(const T &gids, const T &rowinds, int len, NumberedObjects* numObj,  bool subtractOne) {
+  int nextRowInd;
+  int index;
+  for(int i = 0; i < len; i++){
+    index = gids[i] - static_cast<int>(subtractOne);
+    //    std::cout<<"index "<<index<<" i "<<i<<" rowinds[i]-1 "<<rowinds[i]-1<<"\n";
+    nextRowInd = rowinds[i] - static_cast<int>(subtractOne);
+    if(nextRowInd == -1) { // should only happen from a scalar, so there is one dummy indexedNodeInfo
+      nextRowInd = 0;
+    }
+    if(true) { // (Disabling this aggregation because it messes up use of individual nodeFunctionVector elements) if(index != previousIndex) {
+      useInfoVec.push_back(oneNodeUseInfo(static_cast<nodeFun*>(numObj->getObjectPtr(index)), nextRowInd));
+      //previousIndex = index;
+    } else { // simple form of aggregation: push rows of same nodeFun into same object if they come one after the other
+      useInfoVec.back().useInfo.indicesForIndexedNodeInfo.push_back(nextRowInd);
+    }
+  }
+}
+
+NodeVectorClassNew &getNodes(NodeVectorClassNew &input) {
+  // When adding runtime dependencies, we added this layer
+  // previous calculate(NodeVectorClassNew) will now be calculate(getNodes(NodeVectorClassNew))
+  // This new layer, getNodes, will determine what to do based on NODEVECTORTYPE
+  // This need could lend itself to a class hierarchy for NodeVectorClassNew,
+  // but for initial setup of runtime dependencies we are not doing that
+  // partly to wait and see what needs emerge and partly because pointers get cleansed of
+  // types when going back and forth to R, so class hierarchices require additional bookkeeping.
+  if(input.nodeFxnVectorType == STATIC) return(input);
+  // imitate step of SEXP getDependencies
+  vector<int> depCIDs = input.graph->getDependencies(input.graphIDs, input.omitIDs, false);
+  if(true) { // trying to defeat emacs alignment problems
+    std::cout<<"got "<<depCIDs.size()<<" nodes\n";
+  }
+      // imitate steps of nodeFunctionVector (R) -> model$modelDef$graphIDs2indexedNodeInfo(temp_gids)
+      //      std::transform(depIDs.begin(), depIDs.end(), depIDs.begin(), op_decrease); // from 1-based to 0-based indexing
+    vector<int> declIDs = input.graph->maps.graphCID_2_declCID(depCIDs);
+    vector<int> rowIndices = input.graph->maps.graphCID_2_unrolledIndicesMatrixCRow(depCIDs);
+    
+    input.populateUseInfoVec< vector<int> >(depCIDs, rowIndices, depCIDs.size(), input.graph->nodeFxnPointers_byDeclID, false);
+    return(input);
+}
+
 // see include/nimble/nimbleEigenNimArr.h for some templated versions of calculate, simulate, calculateDiff and getLogProb used for arbitrary index vectors
 double calculate(NodeVectorClassNew &nodes) {
   double ans(0);
@@ -1181,6 +1226,21 @@ SEXP populateNodeFxnVector_byGID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedOb
 	return(R_NilValue);
 }
 
+SEXP populateNodeFxnVectorNew_dynamicDeps(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP Stype, SEXP SgraphExtPtr) {
+  std::cout<<"in populateNodeFxnVectorNew_dynamicDeps\n";
+  string depsType;
+  depsType.assign(CHAR(STRING_ELT(Stype, 0)), LENGTH(STRING_ELT(Stype, 0)));
+  nimbleGraph *graphPtr = static_cast<nimbleGraph *>(R_ExternalPtrAddr(SgraphExtPtr));
+  NodeVectorClassNew* nfv = static_cast<NodeVectorClassNew*>(R_ExternalPtrAddr(SnodeFxnVec) );
+  if(depsType != "runtime") {
+    std::cout << "PROBLEM: Calling populateNodeFxnVectorNew_dynamicDeps for a case not marked as dynamic\n";
+  }
+  nfv->nodeFxnVectorType = RUNTIME;
+  nfv->graphIDs = SEXP_2_vectorInt(S_GIDs, -1);
+  nfv->graph = graphPtr;
+  return(R_NilValue);
+}
+
 SEXP populateNodeFxnVectorNew_byDeclID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedObj, SEXP S_ROWINDS){
   //std::cout<<"in populateNodeFxnVectorNew_byDeclID\n";
   int len = LENGTH(S_ROWINDS);
@@ -1188,26 +1248,27 @@ SEXP populateNodeFxnVectorNew_byDeclID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP Snumb
   //std::cout<<"len = "<<len<<"\n";
   int* gids = INTEGER(S_GIDs);
   int* rowinds = INTEGER(S_ROWINDS);
-  int index;
   NumberedObjects* numObj = static_cast<NumberedObjects*>(R_ExternalPtrAddr(SnumberedObj));
   NodeVectorClassNew* nfv = static_cast<NodeVectorClassNew*>(R_ExternalPtrAddr(SnodeFxnVec) ) ;
   //  (*nfv).useInfoVec.resize(len);
   //int previousIndex = -1;
-  int nextRowInd;
-  for(int i = 0; i < len; i++){
-    index = gids[i] - 1;
-    //    std::cout<<"index "<<index<<" i "<<i<<" rowinds[i]-1 "<<rowinds[i]-1<<"\n";
-    nextRowInd = rowinds[i]-1;
-    if(nextRowInd == -1) { // should only happen from a scalar, so there is one dummy indexedNodeInfo
-      nextRowInd = 0;
-    }
-    if(true) { // (Disabling this aggregation because it messes up use of individual nodeFunctionVector elements) if(index != previousIndex) {
-      (*nfv).useInfoVec.push_back(oneNodeUseInfo(static_cast<nodeFun*>(numObj->getObjectPtr(index)), nextRowInd));
-      //previousIndex = index;
-    } else { // simple form of aggregation: push rows of same nodeFun into same object if they come one after the other
-      (*nfv).useInfoVec.back().useInfo.indicesForIndexedNodeInfo.push_back(nextRowInd);
-    }
-  }
+  nfv->populateUseInfoVec<int *>(gids, rowinds, len, numObj, true);
+  // int nextRowInd;
+  // int index;
+  // for(int i = 0; i < len; i++){
+  //   index = gids[i] - 1;
+  //   //    std::cout<<"index "<<index<<" i "<<i<<" rowinds[i]-1 "<<rowinds[i]-1<<"\n";
+  //   nextRowInd = rowinds[i]-1;
+  //   if(nextRowInd == -1) { // should only happen from a scalar, so there is one dummy indexedNodeInfo
+  //     nextRowInd = 0;
+  //   }
+  //   if(true) { // (Disabling this aggregation because it messes up use of individual nodeFunctionVector elements) if(index != previousIndex) {
+  //     (*nfv).useInfoVec.push_back(oneNodeUseInfo(static_cast<nodeFun*>(numObj->getObjectPtr(index)), nextRowInd));
+  //     //previousIndex = index;
+  //   } else { // simple form of aggregation: push rows of same nodeFun into same object if they come one after the other
+  //     (*nfv).useInfoVec.back().useInfo.indicesForIndexedNodeInfo.push_back(nextRowInd);
+  //   }
+  // }
   //  std::cout<<"done with "<<(*nfv).useInfoVec.size()<<"\n";
   return(R_NilValue);
 }

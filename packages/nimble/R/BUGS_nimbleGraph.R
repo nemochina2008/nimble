@@ -26,6 +26,9 @@ nimbleGraphClass <- setRefClass(
                 graphExtPtr <<- .Call('setGraph2', edgesFrom, edgesTo, edgesFrom2ParentExprIDs, nodeFunctionIDs, types, names, numNodes, graphID_2_declID, graphID_2_unrolledIndicesMatrixRow)
             }
         },
+        addCompiledModelInfo = function(Cmodel) {
+            .Call('ng_add_nodeFxnPtrs_byDeclID', graphExtPtr, Cmodel$.nodeFxnPointers_byDeclID$.ptr)
+        },
         anyStochDependencies = function() {
            .Call("anyStochDependencies",graphExtPtr)
         },

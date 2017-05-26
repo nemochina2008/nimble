@@ -11,6 +11,7 @@
 #include "NimArr.h"			
 #include "ModelClassUtils.h"
 #include "RcppNimbleUtils.h"
+#include "nimbleGraph.h"
 #include <Rinternals.h>
 #include "R.h"
 
@@ -54,24 +55,11 @@ class NodeVectorClassNew {
   // original component, for static case
   vector<oneNodeUseInfo> useInfoVec;
   vector<oneNodeUseInfo> &getUseInfoVec() {return(useInfoVec);}
+  template<class T>
+   void populateUseInfoVec(const T &gids, const T &rowinds, int len, NumberedObjects* numObj,  bool subtractOne = false);
 };
 
-NodeVectorClassNew &getNodes(NodeVectorClassNew &input) {
-  // When adding runtime dependencies, we added this layer
-  // previous calculate(NodeVectorClassNew) will now be calculate(getNodes(NodeVectorClassNew))
-  // This new layer, getNodes, will determine what to do based on NODEVECTORTYPE
-  // This need could lend itself to a class hierarchy for NodeVectorClassNew,
-  // but for initial setup of runtime dependencies we are not doing that
-  // partly to wait and see what needs emerge and partly because pointers get cleansed of
-  // types when going back and forth to R, so class hierarchices require additional bookkeeping.
-  if(input.nodeFxnVectorType == STATIC) return(input);
-  // imitate step of SEXP getDependencies
-  vector<int> depNodes = input.graph->getDependencies(input.graphIDs, input.omitIDs, false);
-  // imitate steps of nodeFunctionVector (R) -> model$modelDef$graphIDs2indexedNodeInfo(temp_gids)
-  //    and SEXP populateNodeFxnVector_declIDs
-  
-}
-
+NodeVectorClassNew &getNodes(NodeVectorClassNew &input);
 
 ///// Using NodeVectors:
 // utilities for calling node functions from a vector of node pointers
@@ -787,6 +775,7 @@ extern "C" {
   
   //  SEXP populateNodeFxnVector(SEXP nodeFxnVec, SEXP nodeNames, SEXP );
   SEXP populateNodeFxnVector_byGID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedObj);
+  SEXP populateNodeFxnVectorNew_dynamicDeps(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP Stype, SEXP SgraphPtr);
   SEXP populateNodeFxnVectorNew_byDeclID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedObj, SEXP S_ROWINDS);
   SEXP populateIndexedNodeInfoTable(SEXP StablePtr, SEXP StableContents);
   SEXP populateValueMapAccessorsFromNodeNames(SEXP StargetPtr, SEXP SnodeNames, SEXP SsizesAndNdims, SEXP SModelOrModelValuesPtr );

@@ -292,8 +292,14 @@ calculate_keywordInfo <- keywordInfoClass(
         nodeFunName <- nodeFunctionVector_SetupTemplate$makeName(nodeFunVec_ArgList)	
         addNecessarySetupCode(nodeFunName, nodeFunVec_ArgList, nodeFunctionVector_SetupTemplate, nfProc)
         if(!useNodeFunctionVectorByIndex)
-            newRunCode <- substitute(calculate(nodeFxnVector = NODEFUNVEC_NAME),
-                                     list(NODEFUNVEC_NAME = as.name(nodeFunName)))
+            if(!nimbleOptions()$enableRuntimeDependencies) {
+                newRunCode <- substitute(calculate(nodeFxnVector = NODEFUNVEC_NAME),
+                                         list(NODEFUNVEC_NAME = as.name(nodeFunName)))
+            } else {
+                newRunCode <- substitute(calculate(nodeFxnVector = getNodes(NODEFUNVEC_NAME)),
+                                         list(NODEFUNVEC_NAME = as.name(nodeFunName)))
+   
+            }
         else
             newRunCode <- substitute(calculate(nodeFxnVector = NODEFUNVEC_NAME, nodeFunctionIndex = NODEFUNVECINDEX),
                                  list(NODEFUNVEC_NAME = as.name(nodeFunName), NODEFUNVECINDEX = nodesIndexExpr))

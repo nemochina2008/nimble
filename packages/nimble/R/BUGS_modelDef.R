@@ -2228,8 +2228,11 @@ modelDefClass$methods(newModel = function(data = list(), inits = list(), where =
             if(is(result, 'try-error')) 
                 message(geterrmessage()) else message("")  # this ensures a single newline is included
     }
-    if(nimbleOptions('verbose')) message("checking model sizes and dimensions...", appendLF = FALSE)
-    model$checkBasics()
+    if(!nimbleOptions()$forceRuntimeDependencies) {
+        if(nimbleOptions('verbose')) message("checking model sizes and dimensions...", appendLF = FALSE)
+        model$checkBasics()
+    } else
+        message("Don't forget to remove runtimeDependencies toggle on mode$checkBasics().")
     if(nimbleOptions('verbose')) message("")  # appends newline   
     ## extended model checking via calculate; disabled by default as of July 2016
     if(check) {

@@ -88,6 +88,7 @@ R_CallMethodDef CallEntries[] = {
  FUN(parseVar, 1),
 
  FUN(setGraph, 7),
+ FUN(setGraph2, 9),
  FUN(anyStochDependencies, 1),
  FUN(anyStochParents, 1),
  FUN(getDependencies, 4),

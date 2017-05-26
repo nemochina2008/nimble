@@ -56,7 +56,7 @@ void SEXP_2_nodeType(SEXP Stypes, vector<NODETYPE> &ans) {
   }
 }
 
-vector<int> nimbleGraphMaps::graphCID_2_declCID(const vector<int> &graphCID) {
+vector<int> nimbleGraphMaps::graphCID_2_declCID(const vector<int> &graphCID) const {
   vector<int> ans;
   ans.reserve(graphCID.size());
   for(int i = 0; i < graphCID.size(); i++) {
@@ -65,7 +65,7 @@ vector<int> nimbleGraphMaps::graphCID_2_declCID(const vector<int> &graphCID) {
   return(ans);
 }
 
-vector<int> nimbleGraphMaps::graphCID_2_unrolledIndicesMatrixCRow(const vector<int> &graphCID) {
+vector<int> nimbleGraphMaps::graphCID_2_unrolledIndicesMatrixCRow(const vector<int> &graphCID) const {
   vector<int> ans;
   ans.reserve(graphCID.size());
   for(int i = 0; i < graphCID.size(); i++) {
@@ -110,9 +110,9 @@ SEXP setGraph2(SEXP SedgesFrom, SEXP SedgesTo,
   int numNodes = SEXP_2_int(SnumNodes);
   nimbleGraph *newGraph = new nimbleGraph;
   newGraph->setNodes(edgesFrom, edgesTo, edgesFrom2ParentExprIDs, nodeFunctionIDs, types, names, numNodes);
-  vector<int> graphCID_2_declID = SEXP_2_vectorInt(SgraphID_2_declID, -1);
-  vector<int> graphCID_2_unrolledIndicesMatrixRow = SEXP_2_vectorInt(SgraphID_2_unrolledIndicesMatrixRow, -1);
-  newGraph->setMaps(graphCID_2_declID, graphCID_2_unrolledIndicesMatrixRow);
+  vector<int> graphCID_2_declCID = SEXP_2_vectorInt(SgraphID_2_declID, -1);
+  vector<int> graphCID_2_unrolledIndicesMatrixCRow = SEXP_2_vectorInt(SgraphID_2_unrolledIndicesMatrixRow, -1);
+  newGraph->setMaps(graphCID_2_declCID, graphCID_2_unrolledIndicesMatrixCRow);
   SEXP SextPtrAns;
   PROTECT(SextPtrAns = R_MakeExternalPtr(newGraph, R_NilValue, R_NilValue));
   R_RegisterCFinalizerEx(SextPtrAns, &nimbleGraphFinalizer, TRUE);
@@ -120,6 +120,11 @@ SEXP setGraph2(SEXP SedgesFrom, SEXP SedgesTo,
   return(SextPtrAns);
 }
 
+SEXP ng_add_nodeFxnPtrs_byDeclID(SEXP SgraphExtPtr, SEXP SnodeFxnPtrs_byDeclID) {
+  nimbleGraph *graphPtr = static_cast<nimbleGraph *>(R_ExternalPtrAddr(SgraphExtPtr));
+  graphPtr->nodeFxnPointers_byDeclID = static_cast<NumberedObjects *>(R_ExternalPtrAddr(SnodeFxnPtrs_byDeclID));
+  return(R_NilValue);
+}
 
 void nimbleGraphFinalizer(SEXP SgraphExtPtr) {
   nimbleGraph *graphPtr = static_cast<nimbleGraph *>(R_ExternalPtrAddr(SgraphExtPtr));
@@ -177,10 +182,10 @@ SEXP anyStochParents(SEXP SgraphExtPtr) {
   return(Sans);
 }
 
-void nimbleGraph::setMaps(const vector<int> &graphCID_2_declID,
-			  const vector<int> &graphCID_2_unrolledIndicesMatrixRow) {
-  maps.graphCID_2_declID = graphCID_2_declID;
-  maps.graphCID_2_unrolledIndicesMatrixRow = graphCID_2_unrolledIndicesMatrixRow;
+void nimbleGraph::setMaps(const vector<int> &graphCID_2_declCID,
+			  const vector<int> &graphCID_2_unrolledIndicesMatrixCRow) {
+  maps.graphCID_2_declCID_data = graphCID_2_declCID;
+  maps.graphCID_2_unrolledIndicesMatrixCRow_data = graphCID_2_unrolledIndicesMatrixCRow;
 
 }
 

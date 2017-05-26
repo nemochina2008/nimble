@@ -724,7 +724,7 @@ if(isTRUE(nimbleOptions()$forceRuntimeDependencies)) return(structure(nodeIDs, d
                                       if(!includeRHSonly) depIDs <- depIDs[modelDef$maps$types[depIDs] != 'RHSonly']
                                       if(determOnly)	depIDs <- depIDs[modelDef$maps$types[depIDs] == 'determ']
                                       if(stochOnly)	depIDs <- depIDs[modelDef$maps$types[depIDs] == 'stoch']
-if(!self)	{
+if(!self) {
     nodeFunIDs <- unique(modelDef$maps$vertexID_2_nodeID[ nodeIDs ])
     depIDs <- setdiff(depIDs, nodeFunIDs)
 }
