@@ -62,3 +62,37 @@ gd_getDependencies_IDs <- function(graph, maps, nodes, omit, downstream) {
 
 
 gd_allNeighbors <- function(graph, nodes) stop("shouldn't be calling gd_allNeighbors any more")
+
+enhanceDepsForDerivs <- function(inputNodes, deps, maps) {
+    ## exploratory idea for enhancing an ordered set of nodes with parents, by input order, indexed by which input node they correspond to.
+    ## Example:
+    ## say deps has [2, 4, 6]
+    ## 
+
+    ## path to info: idea 1: go up first
+    ## graphID_2_declID
+    ## from the declID we 
+
+    ## idea 2: 
+    ## from input nodes, see edgesFrom2To and see edgesFrom2ParentExprID
+    ## see if any of the To nodes are in deps and provide the parentExprID
+
+    depIndex_2_parentDepIndices <- vector(mode = 'list', length = length(nodes))
+    for(i in seq_along(nodes)) {
+        thisNode <- nodes[i]
+        if(thisNode %in% inputNodes) {
+            depIndex_2_parentDepIndices[[i]] <- 'input'
+            next
+        }
+        toNodes <- maps$edgesFrom2To[[ thisNode ]]
+        parentExprIDs <- maps$edgesFrom2ParentExprID[[ thisNode ]]
+        from(iTo in seq_along(toNodes)) {
+            thisToNode <- toNodes[iTo]
+            if(thisToNode %in% deps) {
+                iThisNodeInDeps <- which(deps == thisToNode)
+                thisParentExprID <- parentExprIDs[iTo]
+                depIndex_2_parentDepIndices[[iThisNodeInDeps]][ thisParentExprID ] <- i
+            }
+        }
+    }
+}
