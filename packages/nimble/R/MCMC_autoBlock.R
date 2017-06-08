@@ -35,14 +35,13 @@
 #'
 #' @export
 autoBlock <- function(Rmodel,
-                      autoIt = 20000,
+                      autoIt = 2,
                       run = list('all', 'default'),
                       setSeed = TRUE,
                       verbose = FALSE,
                       makePlots = FALSE,
                       round = TRUE ) {
-    if(autoIt < 10000) stop('Minimum auto-blocking iterations is 10,000')
-    control <- list(niter=autoIt, setSeed=setSeed, verbose=verbose, makePlots=makePlots)
+    control <- list(niter=10000, setSeed=setSeed, verbose=verbose, makePlots=makePlots)
     ab <- autoBlockClass(Rmodel, control)
     if(!'auto' %in% run) run <- c(run, 'auto')  ## always use 'autoBlock' routine
     ab$run(run)
@@ -154,7 +153,7 @@ autoBlockModel <- setRefClass(
 autoBlockParamDefaults <- function() {
 	list(
             makePlots = FALSE,
-            niter = 20000,
+            niter = 10000,
             setSeed = TRUE,
             verbose = FALSE
         )
@@ -247,7 +246,9 @@ autoBlockClass <- setRefClass(
                                    runConfListAndSaveBest(confList, name) },
 
                        auto =    { autoIt <- 0
-                                   while((autoIt < 2) || ((!groupingsEquiv(grouping[[it]], grouping[[it-1]])) && (min(essPT[[it]]) > min(essPT[[it-1]])))) {
+                                   #while((autoIt < 2) || ((!groupingsEquiv(grouping[[it]], grouping[[it-1]])) && (min(essPT[[it]]) > min(essPT[[it-1]])))) 
+								while (autoIt < 3){
+					
                                        candidateGroupsList <- if(autoIt==0) list(abModel$nodeGroupScalars)  else determineCandidateGroupsFromCurrentSample()
                                        confList <- lapply(candidateGroupsList, function(groups) createConfFromGroups(groups))
                                        runConfListAndSaveBest(confList, paste0('auto',autoIt), auto=TRUE)
