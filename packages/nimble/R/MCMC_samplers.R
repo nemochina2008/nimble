@@ -1525,17 +1525,10 @@ sampler_RW_dirichlet <- nimbleFunction(
 #
 #' The automated factor slice sampler accepts the following control list elements:
 #' \itemize{
-<<<<<<< HEAD
 #' \item sliceWidths.  A numeric vector of initial slice widths.  The length of the vector must be equal to the sum of the lengths of all nodes being used by the automated factor slice sampler.  Defaults to a vector of 1's.
 #' \item factorBurnIn. The number of iterations for which the factors (eigenvectors) will continue to adapt to the posterior correlation.  (default =  15000)
 #' \item factorAdaptInterval.  The interval on which to perform factor adaptation. (default = 1000)
 #' \item sliceBurnIn.  The maximum number of iterations for which to adapt the slice widths for a given set of factors.  (default = 512)
-=======
-#' \item widths.  A numeric vector of initial slice widths.  The length of the vector must be equal to the sum of the lengths of all nodes being used by the automated factor slice sampler.  Defaults to a vector of 1's.
-#' \item factorBurnIn. The number of iterations for which the factors (eigenvectors) will continue to adapt to the posterior correlation.  (default =  5000)
-#' \item factorAdaptInterval.  The interval on which to perform factor adaptation. (default = 1000)
-#' \item sliceSliceBurnIn.  The maximum number of iterations for which to adapt the slice widths for a given set of factors.  (default = 512)
->>>>>>> codess
 #' \item sliceMaxSteps.  The maximum number of expansions which may occur during the 'stepping out' procedure. (default = 100)
 #' }
 #'
