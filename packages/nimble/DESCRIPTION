@@ -102,6 +102,7 @@ Collate:
     MCMC_suite.R
     MCMC_comparisons.R
     MCMC_autoBlock.R
+	MCMC_autoAdapt.R
     MCEM_build.R
     filtering_auxiliary.R
     filtering_liuwest.R
