@@ -58,14 +58,18 @@ nimbleUserNamespace <- as.environment(list(sessionSpecificDll = NULL))
             adaptScaleOnly = FALSE,
             adaptInterval = 200,
             scale = 1,
+            scaleVector = 'oneVec',
+            coordinateProportion = .9,
             propCov = 'identity',
             sliceWidth = 1,
             sliceMaxSteps = 100,
+
             factorBurnIn = 15000,
             factorAdaptInterval = 1000,
             scaleAdaptInterval = 200,
             sliceBurnIn = 512,
             sliceWidths = 'oneVec',
+
             pfNparticles = 1000,
             pfResample = FALSE,
             pfOptimizeNparticles = FALSE,

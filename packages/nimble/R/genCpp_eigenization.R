@@ -104,6 +104,7 @@ eigenizeCalls <- c( ## component-wise unarys valid for either Eigen array or mat
          'inverse' = 'eigenize_cWiseUnaryMatrix',
          'chol' = 'eigenize_matrixOps',
          RRtest_add = 'eigenize_recyclingRuleFunction'
+
          )
 )
 
