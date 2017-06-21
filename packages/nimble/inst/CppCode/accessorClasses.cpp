@@ -24,6 +24,63 @@ NimArr<2, double> getBound_2D_double(int boundID, const NodeInstruction &useInfo
   return(useInfo.nodeFunPtr->getBound_2D_double_block(boundID, useInfo.operand));
 }
 
+nimSmartPtr<NIMBLE_ADCLASS> calculateWithDerivs(NodeVectorClassNew &nodes) {
+  nimSmartPtr<NIMBLE_ADCLASS> ans;
+  NimArr<1, double> nimDerivsOrders(3);
+  nimDerivsOrders[0] = 0;
+  nimDerivsOrders[1] = 1;
+  nimDerivsOrders[2] = 2;
+  // Assume we have healthy types for
+  nimSmartPtr<NIMBLE_ADCLASS> derivList;
+  vector<bool> derivCalcFlags;
+  vector<double> outGradient(outputSize); // outputSize = sum(sapply(wrtLineInfo, function(x){return(x$lineSize)}))
+  vector<double> outHessian(outputSize * outputSize);
+  // Assume we can extract following from enhancedDerivInfo from nodes object:
+  // (Some may be in nodes, some in each NodeInstruction)
+  vector<bool> determ; // true if deterministic
+  vector<bool> isWrtLine; // (isWrtStep?) true if this step is for a wrt Param
+  vector<bool> isNodeLine; // (isInputNode?) was passed to calculate
+  // this (if we use eigen or std tempate library):
+  vector<int> outIndexEndPoints; // OR lineIndices, depending how we need to use it...
+  vector<int> outIndexStartPoints; //... either way careful about C vs. R indexing
+  // or (if we iterate directly)
+  vector< vector<int> > wrtLineInfo_lineIndices;
+  const vector<NodeInstruction> &instructions = nodes.getInstructions();
+  signed int iNode(0);
+  signed int numNodes(instructions.size());
+  vector<NodeInstruction>::const_iterator thisInstruction(instructions.begin());
+  //vector<NodeInstruction>::const_iterator iNodeEnd(instructions.end());
+
+  for(; iNode != numNodes; ++iNode, ++thisInstruction) {
+    derivCalcFlags.clear();
+    derivList = thisInstruction->nodeFunPtr->calculateBlockWithDerivs(thisInstruction->operand, nimDerivsOrders);
+    if(determ[iNode]) {
+      derivList->value = 0;
+      // Would be great to avoid this:
+      iNode->nodeFunPtr->calculateBlock(iNode->operand);
+    }
+    // possible merge with above if
+    if(determ[iNode]) {
+      derivCalcFlags.push_back(true);
+    } else {
+      if(isNodeLine[iNode]) {
+	derivCalcFlags.push_back(false);
+      }
+    }
+    if(isWrtLine[iNode]) {
+      derivCalcFlags.push_back(true);
+    }
+    {
+      int numFlags(derivCalcFlags.size());
+      int iFlag(0);
+      for(; iFlag < numFlags; ++iFlag) {
+	// imitate
+      }
+    }
+  }
+  return(ans);
+}
+
 // see include/nimble/nimbleEigenNimArr.h for some templated versions of calculate, simulate, calculateDiff and getLogProb used for arbitrary index vectors
 double calculate(NodeVectorClassNew &nodes) {
   double ans(0);
@@ -611,7 +668,7 @@ SEXP getListElement(SEXP list, const char *str){
 	return(ans);
 }
 
-SEXP populateNodeFxnVectorNew_byDeclID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedObj, SEXP S_ROWINDS){
+SEXP populateNodeFxnVectorNew_byDeclID(SEXP SnodeFxnVec, SEXP S_GIDs, SEXP SnumberedObj, SEXP S_ROWINDS, SEXP S_DERIVINFO){
   int len = LENGTH(S_ROWINDS);
   if(len == 0) return(R_NilValue);
   int* gids = INTEGER(S_GIDs);

@@ -9,13 +9,21 @@ nodeFunctionVector <- setRefClass(
     fields = list(
         model = 'ANY',
         gids = 'ANY',
-        indexingInfo = 'ANY'
+        indexingInfo = 'ANY',
+        derivInfo = 'ANY'
                   ),
                #   nodes = 'ANY'),
                #   nodeFunctionRefClassObjects = 'ANY'),
     methods = list(
-        initialize = function(model, nodeNames, excludeData = FALSE, sortUnique = TRUE, errorContext = "") { ##env = parent.frame()) {
+        initialize = function(model, nodeNames, excludeData = FALSE, sortUnique = TRUE, errorContext = "", derivsWRT = NULL) { ##env = parent.frame()) {
             model <<- model
+            if(nimbleOptions('experimentalEnableDerivs')) {
+                if(!is.null(derivsWRT)) {
+                    derivInfo <<- enhanceDepsForDerivs(nodeNames, derivsWRT, model)
+                } else {
+                    derivInfo <<- NULL
+                }
+            }
             if(length(nodeNames) == 0) {
             	gids <<- numeric(0)
                 indexingInfo <<- list(declIDs = integer(), rowIndices = integer())

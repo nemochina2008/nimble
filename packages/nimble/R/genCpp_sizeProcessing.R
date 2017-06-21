@@ -1033,14 +1033,24 @@ sizeNFvar <- function(code, symTab, typeEnv) {
     return(asserts)
 }
 
+## special case - see if it reduces to general case later
+## quick'n'dirty for now - think about general usages later
+sizeCalculateWithDerivs <- function(code, symTab, typeEnv) {
+  code$args$type <- 'nimbleList'
+  ## Can we check if the following is consistent with sizeNimbleListReturningFunction?
+  code$args$sizeExprs <- symTab$getSymbolObject('NIMBLE_ADCLASS', TRUE)
+  code$args$toEigenize <- "yes"
+  code$args$nDim <- 0
+  list()
+}
 
 sizeNimDerivs <- function(code, symTab, typeEnv){
   if(code$args[[1]]$name == 'calculate'){
-    calcDerivFlag <- T
+    calcDerivFlag <- TRUE
     code$args[[1]]$name <- paste0(code$args[[1]]$name, 'WithArgs_deriv')
   } 
   else{
-    calcDerivFlag <- F
+    calcDerivFlag <- FALSE
     code$args[[1]]$name <- paste0(code$args[[1]]$name, '_deriv')
   }
   setArg(code$caller, code$callerArgID, code$args[[1]])
@@ -1048,6 +1058,7 @@ sizeNimDerivs <- function(code, symTab, typeEnv){
   code$args[[2]] <- NULL
   asserts <- recurseSetSizes(code$args[[1]], symTab, typeEnv)
   code$args[[1]]$type <- 'nimbleList'
+  ## Can we check if the following is consistent with sizeNimbleListReturningFunction?
   code$args[[1]]$sizeExprs <- symTab$getSymbolObject('NIMBLE_ADCLASS', TRUE)
   code$args[[1]]$toEigenize <- "yes"
   code$args[[1]]$nDim <- 0

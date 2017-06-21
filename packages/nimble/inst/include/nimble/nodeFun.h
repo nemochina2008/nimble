@@ -44,6 +44,7 @@ class nodeFun : public NamedObjects {
   virtual NimArr<2, double> getBound_2D_double(int boundID, const indexedNodeInfo &iNI) const {NimArr<2, double> ans; return(ans);}
 
   double calculateBlock(int operand) const { return calculate(indexedNodeInfoTable[operand]); }
+  double calculateBlockWithDerivs(int operand, NimArr<1, double> &nimDerivsOrders) const { return calculate(indexedNodeInfoTable[operand], nimDerivsOrders); }
   double calculateDiffBlock(int operand) const { return calculateDiff(indexedNodeInfoTable[operand]); }
   double getLogProbBlock(int operand) const { return getLogProb(indexedNodeInfoTable[operand]); }
   void simulateBlock(int operand) const { simulate(indexedNodeInfoTable[operand]); }
