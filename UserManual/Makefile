@@ -3,6 +3,13 @@ NimbleUserManual.pdf :	NimbleUserManual.Rnw chapter_*.Rnw *Table*tex
 # should we remove the compiled .o/.so in model1 too?
 # loading library(nimble) externally to knitr prevents library-loading messages from getting into the final pdf, I think
 
+NimbleUserManual.html: FORCE
+	# Attempt 1. Fails.
+	pandoc --from=latex NimbleUserManual.tex \
+	       --to=html -o NimbleUserManual.html
+	# Attempt 2. Fails.
+	# htlatex NimbleUserManual.tex
+
 includesMCMConly.pdf :	includesMCMConly.Rnw chapter_MCMC.Rnw
 	Rscript -e "library(knitr);  knit2pdf('includesMCMConly.Rnw')"
 	open -a "Google Chrome" includesMCMConly.pdf
@@ -15,4 +22,6 @@ NimbleUserManualNoEval.pdf :	NimbleUserManual.Rnw
 
 clean :
 	rm -f *.aux *.log *.toc *.out chapter_*.tex NimbleUserManual.tex
+
+FORCE:
 
