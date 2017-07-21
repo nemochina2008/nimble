@@ -1,8 +1,11 @@
 IntermLabelMaker <- labelFunctionCreator('Interm')
 
 ## removing nimArrayGeneral here because now we allow matrix(non-scalar,...) amid an expression
-buildIntermCalls <- c(makeCallList(c('eigen', 'chol','run.time'), 'buildSimpleIntermCall')
-                      )
+buildIntermCalls <- c(makeCallList(c('eigen',
+                                     'chol',
+                                     'run.time',
+                                     'gprofile'),
+                                   'buildSimpleIntermCall'))
 
 
 ## exprClasses_buildInterms

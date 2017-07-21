@@ -103,6 +103,18 @@ run.time <- function(code) {
     as.numeric(system.time(code)[3])
 }
 
+#' Run compiled NIMBLE code under Google Perftools Profiler if libprofiler is available.
+#'
+#' @param code code to be profiled
+#'
+#' @details
+#' Function for use in nimbleFunction run code.
+#' When nimbleFunctions are run in R, this does nothing.
+#' When nimbleFunctions are run in C++, this profiles last execution of code and saves profiling results
+#' to \code{file.path(tempdir(), 'nimble.profile')}.
+#' @export
+gprofile <- function(code) code
+
 #' Check for interrupt (e.g. Ctrl-C) during nimbleFunction execution. Part of the NIMBLE language.
 #'
 #' @author Perry de Valpine

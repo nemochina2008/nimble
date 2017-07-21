@@ -1,7 +1,7 @@
 ## It is hoped substantial sets of these calls can be combined
 ## or implemented by a rule system.
 
-toEigenizeNoCalls <- c('dim', 'run.time','nimOptimDefaultControl')
+toEigenizeNoCalls <- c('dim', 'run.time', 'gprofile', 'nimOptimDefaultControl')
 
 toEigenizeYesCalls <- c(paste0('nimDiagonal', c('D','I','B')),
                         'diagonal',
@@ -88,7 +88,6 @@ toEigenCalls <- c(makeCallList(binaryOperators, 'toEigenBinaryCwise'),          
                        ##setAll = 'sizeOneEigenCommand',
                        voidPtr = 'sizeVoidPtr'
                        ),
-                    ##run.time = 'sizeRunTime'),
                   ##               makeCallList(scalar_distribution_dFuns, 'toEigenYes'),
                   ##               makeCallList(scalar_distribution_pFuns, 'toEigenYes'),
                   ##               makeCallList(scalar_distribution_qFuns, 'sizeRecyclingRule'),
@@ -105,7 +104,6 @@ toEigenCalls <- c(makeCallList(binaryOperators, 'toEigenBinaryCwise'),          
                   ##      makeCallList(c('decide', 'size', 'getsize','getNodeFunctionIndexedInfo', 'endNimbleTimer'), 'sizeScalar'),
                   ## makeCallList(c('calculate','calculateDiff', 'getLogProb'), 'toEigenScalarModelOp'),
                   simulate = 'toEigenIgnoreForNow'
-                  ##               makeCallList(c('blank', 'nfMethod', 'getPtr', 'startNimbleTimer'), 'sizeUndefined')
                   )
 
 

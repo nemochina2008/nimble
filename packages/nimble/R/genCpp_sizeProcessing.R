@@ -62,7 +62,8 @@ sizeCalls <- c(makeCallList(binaryOperators, 'sizeBinaryCwise'),
                     nimArrayGeneral = 'sizeNimArrayGeneral',
                     setAll = 'sizeOneEigenCommand',
                     voidPtr = 'sizeVoidPtr',
-                    run.time = 'sizeRunTime'),
+                    run.time = 'sizeRunTime',
+                    gprofile = 'sizeGprofile'),
                makeCallList(scalar_distribution_dFuns, 'sizeRecyclingRule'),
                makeCallList(scalar_distribution_pFuns, 'sizeRecyclingRule'),
                makeCallList(scalar_distribution_qFuns, 'sizeRecyclingRule'),
@@ -864,6 +865,25 @@ sizeRunTime <- function(code, symTab, typeEnv) {
     newCode$sizeExprs <- list()
     newCode$toEigenize <- 'no'
     setArg(origCaller, origCallerArgID, newCode)
+    return(asserts)
+}
+
+sizeGprofile <- function(code, symTab, typeEnv) {
+    if(length(code$args) != 1) {
+        stop(exprClassProcessingErrorMsg(code, paste0('run.time must take exactly 1 argument')), call. = FALSE)
+    }
+    origCaller <- code$caller
+    origCallerArgID <- code$callerArgID
+
+    ## Arg to gprofile should be in {}, so any nested asserts should be done by the time this finishes and this should return NULL.
+    recurseAsserts <- recurseSetSizes(code, symTab, typeEnv)
+    if(!is.null(recurseAsserts)) {
+        message('issue in sizeGprofile: recurseAsserts is not NULL')
+    }
+    filename <- file.path(tempdir(), 'nimble.profile')
+    profilerStartAssert <- RparseTree2ExprClasses(substitute(ProfilerStart(filename), list(filename = filename)))
+    profilerStopAssert <- RparseTree2ExprClasses(ProfilerStop())
+    asserts <- list(profilerStartAssert, code$args[[1]], profilerStopAssert)
     return(asserts)
 }
 
