@@ -13,7 +13,8 @@ RCfunctionDef <- setRefClass('RCfunctionDef',
                                                      "<Rinternals.h>",
                                                      nimbleIncludeFile("accessorClasses.h"),
                                                      nimbleIncludeFile("nimDists.h"),
-                                                     nimbleIncludeFile("nimOptim.h"))
+                                                     nimbleIncludeFile("nimOptim.h"),
+                                                     (if(nimbleOptions('useGooglePerftools')) nimbleIncludeFile("profiler.h") else NULL))
                                      CPPincludes <<- c(CPPincludes,
                                                        '<Rmath.h>',
                                                        '<math.h>',

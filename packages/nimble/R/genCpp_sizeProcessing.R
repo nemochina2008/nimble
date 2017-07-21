@@ -870,21 +870,33 @@ sizeRunTime <- function(code, symTab, typeEnv) {
 
 sizeGprofile <- function(code, symTab, typeEnv) {
     if(length(code$args) != 1) {
-        stop(exprClassProcessingErrorMsg(code, paste0('run.time must take exactly 1 argument')), call. = FALSE)
+        stop(exprClassProcessingErrorMsg(code, paste0('gprofile must take exactly 1 argument')), call. = FALSE)
     }
+
     origCaller <- code$caller
     origCallerArgID <- code$callerArgID
+    newCode <- code$args[[1]]
 
-    ## Arg to gprofile should be in {}, so any nested asserts should be done by the time this finishes and this should return NULL.
+    ## Arg to gprofile should be in {}.
+    if(newCode != '{') stop()
+    ## Therefore any nested asserts should be done by the time this finishes and this should return NULL.
     recurseAsserts <- recurseSetSizes(code, symTab, typeEnv)
     if(!is.null(recurseAsserts)) {
         message('issue in sizeGprofile: recurseAsserts is not NULL')
     }
-    filename <- file.path(tempdir(), 'nimble.profile')
-    profilerStartAssert <- RparseTree2ExprClasses(substitute(ProfilerStart(filename), list(filename = filename)))
-    profilerStopAssert <- RparseTree2ExprClasses(ProfilerStop())
-    asserts <- list(profilerStartAssert, code$args[[1]], profilerStopAssert)
-    return(asserts)
+
+    if(nimbleOptions('useGooglePerftools')) {
+        filename <- file.path(tempdir(), 'nimble.profile')
+        profilerStart <- RparseTree2ExprClasses(substitute(ProfilerStart(filename), list(filename = filename)))
+        profilerStop <- RparseTree2ExprClasses(quote(ProfilerStop()))
+        for (i in length(newCode$args):1) {
+            setArg(newCode, 1 + i, newCode$args[[i]])
+        }
+        setArg(newCode, 1, profilerStart)
+        setArg(newCode, 1 + length(newCode$args), profilerStop)
+    }
+    setArg(origCaller, origCallerArgID, newCode)
+    return(invisible(NULL))
 }
 
 sizeGetParam <- function(code, symTab, typeEnv) {

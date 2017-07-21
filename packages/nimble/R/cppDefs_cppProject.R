@@ -266,6 +266,9 @@ cppProjectClass <- setRefClass('cppProjectClass',
                                        on.exit(setwd(cur))
 
                                        if(is.null(nimbleUserNamespace$sessionSpecificDll)) compileDynamicRegistrations(showCompilerOutput = showCompilerOutput)
+                                       if(nimbleOptions('useGooglePerftools')) {
+                                           SHLIBcmd <- paste(SHLIBcmd, '-lprofiler')
+                                       }
 
                                        origSHLIBcmd <- SHLIBcmd
                                        if(isTRUE(nimbleOptions()$stopCompilationBeforeLinking)) {## used only for testing, when we want to go quickly and skip linking and bail out

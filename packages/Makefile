@@ -41,6 +41,7 @@ clang-format: FORCE
 	  nimble/inst/include/nimble/NimArrBase.h \
 	  nimble/inst/include/nimble/NimArr.h \
 	  nimble/inst/include/nimble/predefinedNimbleLists.h \
+	  nimble/inst/include/nimble/profiler.h \
 	  nimble/inst/CppCode/predefinedNimbleLists.cpp \
 	  -i
 

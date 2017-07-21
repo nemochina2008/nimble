@@ -15,6 +15,7 @@ nimbleUserNamespace <- as.environment(list(sessionSpecificDll = NULL))
         pauseAfterWritingFiles = FALSE,
         CppAD_directory = NA,
         experimentalEnableDerivs = FALSE,
+        useGooglePerftools = FALSE,
         convertSingleVectorsToScalarsInSetupArgs = TRUE,
         messagesWhenBuildingOrFinalizingCppObjects = FALSE,
         indexDrop = TRUE,
