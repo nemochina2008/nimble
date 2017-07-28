@@ -241,10 +241,11 @@ makeStaticInitClass <- function(cppDef, derivMethods) {
                                                                    name = paste0('initTape_', cppDef$name, '_Object_'))
     initializerCodeList <- list()
     for(derivFun in derivMethods){
-      initializerDef <- cppFunctionDef(name = paste0('initTape_', cppDef$name), returnType = emptyTypeInfo())
-      initializerCodeList <- c(initializerCodeList,
+        initializerDef <- cppFunctionDef(name = paste0('initTape_', cppDef$name), returnType = emptyTypeInfo())
+        ## Nick: R CMD check doesn't like CLASSNAME::foo as it thinks it is a real namespace resolution. This maay or may not work; feel free to revert:
+      initializerCodeList <- eval(parse(text = "c(initializerCodeList,
                                substitute(push_back(CLASSNAME::allADtapePtrs_, CLASSNAME::ADTAPINGNAME() ),  
-                                          list(CLASSNAME = as.name(cppDef$name),ADTAPINGNAME = as.name(paste0(derivFun, "_callForADtaping_")))))
+                                          list(CLASSNAME = as.name(cppDef$name),ADTAPINGNAME = as.name(paste0(derivFun, '_callForADtaping_')))))"))
     }
     initializerCode <- do.call('call', c('{', initializerCodeList), quote = TRUE)
     initializerECcode <- RparseTree2ExprClasses(initializerCode)
